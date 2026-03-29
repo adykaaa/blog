@@ -16,7 +16,7 @@ I spend most of my time in the intersection of:
 - **Platform & Infrastructure Engineering** — Kubernetes, cloud-native tooling, GitOps, IaC
 - **Distributed Systems** — service meshes, observability, reliability patterns
 - **Developer Experience** — internal platforms, CI/CD, making the boring stuff fast
-- **Learning Backend engineering** — I've been mostly using Go, but now I've decided to jump into Rust.
+- **Backend Engineering** — I've been mostly using Go, but now I've decided to jump into and learn Rust!
 
 ## This blog
 

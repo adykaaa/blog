@@ -1,18 +1,151 @@
-<!doctype html><html lang=en-us><head><meta charset=UTF-8><meta name=viewport content="width=device-width,initial-scale=1"><meta http-equiv=X-UA-Compatible content="IE=edge"><title>Caching at Scale: Patterns, Pitfalls, and When Not to Cache · Adam Toth</title><meta name=description content="Caching is one of the most powerful tools in distributed systems design and one of the easiest to misuse. A practical look at cache strategies, invalidation, and the cases where you're better off without one."><meta name=author content="Adam Toth"><meta name=robots content="index, follow"><meta property="og:title" content="Caching at Scale: Patterns, Pitfalls, and When Not to Cache"><meta property="og:description" content="Caching is one of the most powerful tools in distributed systems design and one of the easiest to misuse. A practical look at cache strategies, invalidation, and the cases where you're better off without one."><meta property="og:type" content="article"><link rel=preconnect href=https://fonts.googleapis.com><link rel=preconnect href=https://fonts.gstatic.com crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel=stylesheet><link rel=stylesheet href=https://adykaaa.github.io/blog/css/main.css></head><body><header class=site-header><nav class=nav><div class=nav-brand><a href=https://adykaaa.github.io/ class=brand-link>Adam Toth</a></div><ul class=nav-menu><li class=nav-item><a href=https://adykaaa.github.io/blog/blog/ class=nav-link>Blog</a></li><li class=nav-item><a href=https://adykaaa.github.io/blog/about/ class=nav-link>About</a></li></ul></nav></header><main class=main><div class=content-wrap><article class=single-post><header class=post-header><div class=post-meta><time datetime=2025-02-10 class=post-date>February 10, 2025</time><div class=post-tags><span class=tag>system design</span><span class=tag>caching</span><span class=tag>distributed systems</span></div></div><h1 class=single-title>Caching at Scale: Patterns, Pitfalls, and When Not to Cache</h1><p class=single-description>Caching is one of the most powerful tools in distributed systems design and one of the easiest to misuse. A practical look at cache strategies, invalidation, and the cases where you're better off without one.</p></header><div class=post-content><p>There are only two hard things in computer science: cache invalidation, naming things, and off-by-one errors.</p><p>The joke is old but the pain is evergreen. Caching is one of the most effective performance levers available, and one of the most reliably misused. Let&rsquo;s talk through the practical landscape.</p><h2 id=why-cache-at-all>Why cache at all?</h2><p>The motivation is simple: compute and I/O take time. If you&rsquo;ve already done a computation, or fetched a value from a database, and the answer hasn&rsquo;t changed, why do it again?</p><p>The tradeoff is consistency. A cache is, by definition, a stale copy of the truth. Every caching strategy is an answer to the question: <em>how stale can I afford to be, and for how long?</em></p><h2 id=cache-aside-lazy-loading>Cache-aside (lazy loading)</h2><p>The most common pattern. The application code checks the cache first; on a miss, it fetches from the source of truth, writes to the cache, and returns the result.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none><code class=language-go data-lang=go><span style=display:flex><span><span style=color:#8be9fd;font-style:italic>func</span> <span style=color:#50fa7b>getUser</span>(id <span style=color:#8be9fd>string</span>) (<span style=color:#ff79c6>*</span>User, <span style=color:#8be9fd>error</span>) {
-</span></span><span style=display:flex><span>    <span style=color:#ff79c6>if</span> cached, ok <span style=color:#ff79c6>:=</span> cache.<span style=color:#50fa7b>Get</span>(id); ok {
-</span></span><span style=display:flex><span>        <span style=color:#ff79c6>return</span> cached.(<span style=color:#ff79c6>*</span>User), <span style=color:#ff79c6>nil</span>
-</span></span><span style=display:flex><span>    }
-</span></span><span style=display:flex><span>    user, err <span style=color:#ff79c6>:=</span> db.<span style=color:#50fa7b>GetUser</span>(id)
-</span></span><span style=display:flex><span>    <span style=color:#ff79c6>if</span> err <span style=color:#ff79c6>!=</span> <span style=color:#ff79c6>nil</span> {
-</span></span><span style=display:flex><span>        <span style=color:#ff79c6>return</span> <span style=color:#ff79c6>nil</span>, err
-</span></span><span style=display:flex><span>    }
-</span></span><span style=display:flex><span>    cache.<span style=color:#50fa7b>Set</span>(id, user, <span style=color:#bd93f9>5</span><span style=color:#ff79c6>*</span>time.Minute)
-</span></span><span style=display:flex><span>    <span style=color:#ff79c6>return</span> user, <span style=color:#ff79c6>nil</span>
-</span></span><span style=display:flex><span>}
-</span></span></code></pre></div><p><strong>Pros:</strong> Only caches what&rsquo;s actually requested. Cache failures degrade gracefully — the app still works, just slower.</p><p><strong>Cons:</strong> Cold starts are slow. A cache miss under high load causes a <strong>thundering herd</strong>: every request hits the database simultaneously. Mitigate with locks or probabilistic early expiration.</p><h2 id=write-through>Write-through</h2><p>On every write, update the cache and the database together. Reads always hit the cache; writes hit both.</p><p><strong>Pros:</strong> Cache is always warm. No read-time misses after a write.</p><p><strong>Cons:</strong> Every write pays double. You end up caching data that&rsquo;s rarely read. Works well when read-to-write ratio is high.</p><h2 id=write-behind-write-back>Write-behind (write-back)</h2><p>Write to the cache synchronously, write to the database asynchronously. Higher write throughput at the cost of durability.</p><p>This is how most database buffer pools work. It&rsquo;s also how you lose data if your cache layer goes down before the async flush completes. Use with care and explicit trade-off acknowledgment.</p><h2 id=ttl-is-not-invalidation>TTL is not invalidation</h2><p>Setting a TTL of five minutes doesn&rsquo;t mean your cache is consistent within five minutes. It means it&rsquo;s <em>eventually</em> consistent with a five-minute bound — in the happy path, with no failures.</p><p>Real invalidation requires either:</p><ol><li><strong>Event-driven purges</strong> — when the source changes, send a signal to invalidate the cache entry. Works well but creates coupling and adds a failure mode.</li><li><strong>Versioned keys</strong> — include a version or timestamp in the cache key. Old keys are never invalidated; they just get evicted when the TTL expires. No invalidation logic, but can cause key explosion.</li></ol><p>Neither is perfect. Choose based on your consistency requirements.</p><h2 id=when-not-to-cache>When not to cache</h2><p>Not everything benefits from caching.</p><ul><li><strong>Highly personalized data</strong> — per-user results that vary constantly. Cache hit rates will be low; the overhead may exceed the benefit.</li><li><strong>Data that changes faster than your TTL</strong> — you&rsquo;re serving stale data with false confidence.</li><li><strong>Write-heavy workloads</strong> — constant invalidation negates the read benefit.</li><li><strong>When you haven&rsquo;t measured</strong> — caching is an optimization. Optimize for the bottleneck you&rsquo;ve observed, not the one you&rsquo;ve assumed.</li></ul><p>Profile first. The L1 cache on your CPU is already doing a lot of work.</p><h2 id=the-metrics-that-matter>The metrics that matter</h2><p>When you add a cache, track:</p><ul><li><strong>Hit rate</strong> — below 80% is usually a signal something is wrong</li><li><strong>Eviction rate</strong> — high evictions mean your cache is undersized for the working set</li><li><strong>Miss latency</strong> — the tail latency on misses dominates overall p99 when hit rates dip</li></ul><p>Treat your cache like any other service: SLOs, alerts, dashboards. A cache that goes down silently is worse than no cache.</p><hr><p>Caching is powerful, humble, and underspecified in most architecture discussions. The next time someone proposes adding a Redis layer, the first question should be: what are we measuring, and how will we know if it helped?</p></div><footer class=post-footer><div class=post-nav><a href=/blog/blog/go-concurrency-patterns/ class="post-nav-link post-nav-prev"><span class=post-nav-label>← Previous</span>
-<span class=post-nav-title>Go Concurrency Patterns I Keep Coming Back To</span>
-</a><a href=/blog/blog/internal-developer-platforms/ class="post-nav-link post-nav-next"><span class=post-nav-label>Next →</span>
-<span class=post-nav-title>What Makes a Good Internal Developer Platform?</span></a></div><a href=https://adykaaa.github.io/blog/ class=back-link>← Back to all posts</a></footer></article></div></main><footer class=site-footer><div class=footer-inner><span class=footer-copy>© 2026 Adam Toth</span>
-<span class=footer-sep>·</span>
-<span class=footer-links><a href=https://github.com/adykaaa target=_blank rel="noopener noreferrer" class=footer-link>GitHub</a>
-<span class=footer-sep>·</span><a href=https://www.linkedin.com/in/adamtoth0814/ target=_blank rel="noopener noreferrer" class=footer-link>LinkedIn</a></span></div></footer></body></html>
+<!DOCTYPE html>
+<html lang="en-us">
+<head><script src="/blog/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=blog/livereload" data-no-instant defer></script>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<title>Caching at Scale: Patterns, Pitfalls, and When Not to Cache · Adam Toth</title>
+<meta name="description" content="Caching is one of the most powerful tools in distributed systems design and one of the easiest to misuse. A practical look at cache strategies, invalidation, and the cases where you&#39;re better off without one.">
+<meta name="author" content="Adam Toth">
+<meta name="robots" content="index, follow">
+<meta property="og:title" content="Caching at Scale: Patterns, Pitfalls, and When Not to Cache">
+<meta property="og:description" content="Caching is one of the most powerful tools in distributed systems design and one of the easiest to misuse. A practical look at cache strategies, invalidation, and the cases where you&#39;re better off without one.">
+<meta property="og:type" content="article">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="http://localhost:1313/blog/css/main.css">
+
+</head>
+<body>
+  <header class="site-header">
+  <nav class="nav">
+    <div class="nav-brand">
+      <a href="http://localhost:1313/blog/" class="brand-link">Adam Toth</a>
+    </div>
+    <ul class="nav-menu">
+      
+      <li class="nav-item">
+        <a href="http://localhost:1313/blog/" class="nav-link">Blog</a>
+      </li>
+      
+      <li class="nav-item">
+        <a href="http://localhost:1313/blog/about/" class="nav-link">About</a>
+      </li>
+      
+    </ul>
+  </nav>
+</header>
+
+  <main class="main">
+    <div class="content-wrap">
+      
+<article class="single-post">
+  <header class="post-header">
+    <div class="post-meta">
+      <time datetime="2025-02-10" class="post-date">February 10, 2025</time>
+      
+      
+      <div class="post-tags">
+        <span class="tag">system design</span><span class="tag">caching</span><span class="tag">distributed systems</span>
+      </div>
+      
+    </div>
+    <h1 class="single-title">Caching at Scale: Patterns, Pitfalls, and When Not to Cache</h1>
+    
+    <p class="single-description">Caching is one of the most powerful tools in distributed systems design and one of the easiest to misuse. A practical look at cache strategies, invalidation, and the cases where you&#39;re better off without one.</p>
+    
+  </header>
+
+  <div class="post-content">
+    <p>There are only two hard things in computer science: cache invalidation, naming things, and off-by-one errors.</p>
+<p>The joke is old but the pain is evergreen. Caching is one of the most effective performance levers available, and one of the most reliably misused. Let&rsquo;s talk through the practical landscape.</p>
+<h2 id="why-cache-at-all">Why cache at all?</h2>
+<p>The motivation is simple: compute and I/O take time. If you&rsquo;ve already done a computation, or fetched a value from a database, and the answer hasn&rsquo;t changed, why do it again?</p>
+<p>The tradeoff is consistency. A cache is, by definition, a stale copy of the truth. Every caching strategy is an answer to the question: <em>how stale can I afford to be, and for how long?</em></p>
+<h2 id="cache-aside-lazy-loading">Cache-aside (lazy loading)</h2>
+<p>The most common pattern. The application code checks the cache first; on a miss, it fetches from the source of truth, writes to the cache, and returns the result.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">getUser</span>(id <span style="color:#8be9fd">string</span>) (<span style="color:#ff79c6">*</span>User, <span style="color:#8be9fd">error</span>) {
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">if</span> cached, ok <span style="color:#ff79c6">:=</span> cache.<span style="color:#50fa7b">Get</span>(id); ok {
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">return</span> cached.(<span style="color:#ff79c6">*</span>User), <span style="color:#ff79c6">nil</span>
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    user, err <span style="color:#ff79c6">:=</span> db.<span style="color:#50fa7b">GetUser</span>(id)
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    cache.<span style="color:#50fa7b">Set</span>(id, user, <span style="color:#bd93f9">5</span><span style="color:#ff79c6">*</span>time.Minute)
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> user, <span style="color:#ff79c6">nil</span>
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p><strong>Pros:</strong> Only caches what&rsquo;s actually requested. Cache failures degrade gracefully — the app still works, just slower.</p>
+<p><strong>Cons:</strong> Cold starts are slow. A cache miss under high load causes a <strong>thundering herd</strong>: every request hits the database simultaneously. Mitigate with locks or probabilistic early expiration.</p>
+<h2 id="write-through">Write-through</h2>
+<p>On every write, update the cache and the database together. Reads always hit the cache; writes hit both.</p>
+<p><strong>Pros:</strong> Cache is always warm. No read-time misses after a write.</p>
+<p><strong>Cons:</strong> Every write pays double. You end up caching data that&rsquo;s rarely read. Works well when read-to-write ratio is high.</p>
+<h2 id="write-behind-write-back">Write-behind (write-back)</h2>
+<p>Write to the cache synchronously, write to the database asynchronously. Higher write throughput at the cost of durability.</p>
+<p>This is how most database buffer pools work. It&rsquo;s also how you lose data if your cache layer goes down before the async flush completes. Use with care and explicit trade-off acknowledgment.</p>
+<h2 id="ttl-is-not-invalidation">TTL is not invalidation</h2>
+<p>Setting a TTL of five minutes doesn&rsquo;t mean your cache is consistent within five minutes. It means it&rsquo;s <em>eventually</em> consistent with a five-minute bound — in the happy path, with no failures.</p>
+<p>Real invalidation requires either:</p>
+<ol>
+<li><strong>Event-driven purges</strong> — when the source changes, send a signal to invalidate the cache entry. Works well but creates coupling and adds a failure mode.</li>
+<li><strong>Versioned keys</strong> — include a version or timestamp in the cache key. Old keys are never invalidated; they just get evicted when the TTL expires. No invalidation logic, but can cause key explosion.</li>
+</ol>
+<p>Neither is perfect. Choose based on your consistency requirements.</p>
+<h2 id="when-not-to-cache">When not to cache</h2>
+<p>Not everything benefits from caching.</p>
+<ul>
+<li><strong>Highly personalized data</strong> — per-user results that vary constantly. Cache hit rates will be low; the overhead may exceed the benefit.</li>
+<li><strong>Data that changes faster than your TTL</strong> — you&rsquo;re serving stale data with false confidence.</li>
+<li><strong>Write-heavy workloads</strong> — constant invalidation negates the read benefit.</li>
+<li><strong>When you haven&rsquo;t measured</strong> — caching is an optimization. Optimize for the bottleneck you&rsquo;ve observed, not the one you&rsquo;ve assumed.</li>
+</ul>
+<p>Profile first. The L1 cache on your CPU is already doing a lot of work.</p>
+<h2 id="the-metrics-that-matter">The metrics that matter</h2>
+<p>When you add a cache, track:</p>
+<ul>
+<li><strong>Hit rate</strong> — below 80% is usually a signal something is wrong</li>
+<li><strong>Eviction rate</strong> — high evictions mean your cache is undersized for the working set</li>
+<li><strong>Miss latency</strong> — the tail latency on misses dominates overall p99 when hit rates dip</li>
+</ul>
+<p>Treat your cache like any other service: SLOs, alerts, dashboards. A cache that goes down silently is worse than no cache.</p>
+<hr>
+<p>Caching is powerful, humble, and underspecified in most architecture discussions. The next time someone proposes adding a Redis layer, the first question should be: what are we measuring, and how will we know if it helped?</p>
+
+  </div>
+
+  <footer class="post-footer">
+    <div class="post-nav">
+      
+      <a href="/blog/blog/go-concurrency-patterns/" class="post-nav-link post-nav-prev">
+        <span class="post-nav-label">← Previous</span>
+        <span class="post-nav-title">Go Concurrency Patterns I Keep Coming Back To</span>
+      </a>
+      
+      
+      <a href="/blog/blog/internal-developer-platforms/" class="post-nav-link post-nav-next">
+        <span class="post-nav-label">Next →</span>
+        <span class="post-nav-title">What Makes a Good Internal Developer Platform?</span>
+      </a>
+      
+    </div>
+    <a href="http://localhost:1313/blog/" class="back-link">← Back to all posts</a>
+  </footer>
+</article>
+
+    </div>
+  </main>
+  <footer class="site-footer">
+  <div class="footer-inner">
+    <span class="footer-copy">© 2026 Adam Toth</span>
+    <span class="footer-sep">·</span>
+    <span class="footer-links">
+      <a href="https://github.com/adykaaa" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub</a>
+      <span class="footer-sep">·</span><a href="https://www.linkedin.com/in/adamtoth0814/" target="_blank" rel="noopener noreferrer" class="footer-link">LinkedIn</a>
+    </span>
+  </div>
+</footer>
+
+</body>
+</html>

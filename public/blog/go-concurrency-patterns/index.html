@@ -1,76 +1,188 @@
-<!doctype html><html lang=en-us><head><meta charset=UTF-8><meta name=viewport content="width=device-width,initial-scale=1"><meta http-equiv=X-UA-Compatible content="IE=edge"><title>Go Concurrency Patterns I Keep Coming Back To · Adam Toth</title><meta name=description content="Goroutines and channels are easy to learn and easy to misuse. A few patterns I reach for repeatedly in production Go code."><meta name=author content="Adam Toth"><meta name=robots content="index, follow"><meta property="og:title" content="Go Concurrency Patterns I Keep Coming Back To"><meta property="og:description" content="Goroutines and channels are easy to learn and easy to misuse. A few patterns I reach for repeatedly in production Go code."><meta property="og:type" content="article"><link rel=preconnect href=https://fonts.googleapis.com><link rel=preconnect href=https://fonts.gstatic.com crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel=stylesheet><link rel=stylesheet href=https://adykaaa.github.io/blog/css/main.css></head><body><header class=site-header><nav class=nav><div class=nav-brand><a href=https://adykaaa.github.io/ class=brand-link>Adam Toth</a></div><ul class=nav-menu><li class=nav-item><a href=https://adykaaa.github.io/blog/blog/ class=nav-link>Blog</a></li><li class=nav-item><a href=https://adykaaa.github.io/blog/about/ class=nav-link>About</a></li></ul></nav></header><main class=main><div class=content-wrap><article class=single-post><header class=post-header><div class=post-meta><time datetime=2025-01-22 class=post-date>January 22, 2025</time><div class=post-tags><span class=tag>go</span><span class=tag>concurrency</span><span class=tag>backend</span></div></div><h1 class=single-title>Go Concurrency Patterns I Keep Coming Back To</h1><p class=single-description>Goroutines and channels are easy to learn and easy to misuse. A few patterns I reach for repeatedly in production Go code.</p></header><div class=post-content><p>Go&rsquo;s concurrency model is genuinely one of my favorite things about the language. Goroutines are cheap, channels are expressive, and the <code>go</code> keyword makes parallelism feel almost too easy.</p><p>That &ldquo;almost&rdquo; is doing a lot of work. Here are the patterns I reach for repeatedly, and the failure modes I&rsquo;ve learned to avoid.</p><h2 id=worker-pools>Worker pools</h2><p>The canonical use case: you have N items to process and want to parallelize across M workers without spawning N goroutines.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none><code class=language-go data-lang=go><span style=display:flex><span><span style=color:#8be9fd;font-style:italic>func</span> <span style=color:#50fa7b>processItems</span>(items []Item, workers <span style=color:#8be9fd>int</span>) []Result {
-</span></span><span style=display:flex><span>    jobs <span style=color:#ff79c6>:=</span> <span style=color:#8be9fd;font-style:italic>make</span>(<span style=color:#8be9fd;font-style:italic>chan</span> Item, <span style=color:#8be9fd;font-style:italic>len</span>(items))
-</span></span><span style=display:flex><span>    results <span style=color:#ff79c6>:=</span> <span style=color:#8be9fd;font-style:italic>make</span>(<span style=color:#8be9fd;font-style:italic>chan</span> Result, <span style=color:#8be9fd;font-style:italic>len</span>(items))
-</span></span><span style=display:flex><span>
-</span></span><span style=display:flex><span>    <span style=color:#6272a4>// Start workers</span>
-</span></span><span style=display:flex><span>    <span style=color:#8be9fd;font-style:italic>var</span> wg sync.WaitGroup
-</span></span><span style=display:flex><span>    <span style=color:#ff79c6>for</span> i <span style=color:#ff79c6>:=</span> <span style=color:#bd93f9>0</span>; i &lt; workers; i<span style=color:#ff79c6>++</span> {
-</span></span><span style=display:flex><span>        wg.<span style=color:#50fa7b>Add</span>(<span style=color:#bd93f9>1</span>)
-</span></span><span style=display:flex><span>        <span style=color:#ff79c6>go</span> <span style=color:#8be9fd;font-style:italic>func</span>() {
-</span></span><span style=display:flex><span>            <span style=color:#ff79c6>defer</span> wg.<span style=color:#50fa7b>Done</span>()
-</span></span><span style=display:flex><span>            <span style=color:#ff79c6>for</span> item <span style=color:#ff79c6>:=</span> <span style=color:#ff79c6>range</span> jobs {
-</span></span><span style=display:flex><span>                results <span style=color:#ff79c6>&lt;-</span> <span style=color:#50fa7b>process</span>(item)
-</span></span><span style=display:flex><span>            }
-</span></span><span style=display:flex><span>        }()
-</span></span><span style=display:flex><span>    }
-</span></span><span style=display:flex><span>
-</span></span><span style=display:flex><span>    <span style=color:#6272a4>// Send jobs</span>
-</span></span><span style=display:flex><span>    <span style=color:#ff79c6>for</span> _, item <span style=color:#ff79c6>:=</span> <span style=color:#ff79c6>range</span> items {
-</span></span><span style=display:flex><span>        jobs <span style=color:#ff79c6>&lt;-</span> item
-</span></span><span style=display:flex><span>    }
-</span></span><span style=display:flex><span>    <span style=color:#8be9fd;font-style:italic>close</span>(jobs)
-</span></span><span style=display:flex><span>
-</span></span><span style=display:flex><span>    <span style=color:#6272a4>// Wait and close results</span>
-</span></span><span style=display:flex><span>    <span style=color:#ff79c6>go</span> <span style=color:#8be9fd;font-style:italic>func</span>() {
-</span></span><span style=display:flex><span>        wg.<span style=color:#50fa7b>Wait</span>()
-</span></span><span style=display:flex><span>        <span style=color:#8be9fd;font-style:italic>close</span>(results)
-</span></span><span style=display:flex><span>    }()
-</span></span><span style=display:flex><span>
-</span></span><span style=display:flex><span>    <span style=color:#8be9fd;font-style:italic>var</span> out []Result
-</span></span><span style=display:flex><span>    <span style=color:#ff79c6>for</span> r <span style=color:#ff79c6>:=</span> <span style=color:#ff79c6>range</span> results {
-</span></span><span style=display:flex><span>        out = <span style=color:#8be9fd;font-style:italic>append</span>(out, r)
-</span></span><span style=display:flex><span>    }
-</span></span><span style=display:flex><span>    <span style=color:#ff79c6>return</span> out
-</span></span><span style=display:flex><span>}
-</span></span></code></pre></div><p>Key details: close <code>jobs</code> to signal workers to stop. Use a separate goroutine to close <code>results</code> after the WaitGroup drains, so the consumer loop terminates.</p><h2 id=context-for-cancellation>Context for cancellation</h2><p>Never start a long-running goroutine without a way to stop it. <code>context.Context</code> is the idiomatic mechanism.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none><code class=language-go data-lang=go><span style=display:flex><span><span style=color:#8be9fd;font-style:italic>func</span> <span style=color:#50fa7b>pollForUpdates</span>(ctx context.Context, interval time.Duration) {
-</span></span><span style=display:flex><span>    ticker <span style=color:#ff79c6>:=</span> time.<span style=color:#50fa7b>NewTicker</span>(interval)
-</span></span><span style=display:flex><span>    <span style=color:#ff79c6>defer</span> ticker.<span style=color:#50fa7b>Stop</span>()
-</span></span><span style=display:flex><span>    <span style=color:#ff79c6>for</span> {
-</span></span><span style=display:flex><span>        <span style=color:#ff79c6>select</span> {
-</span></span><span style=display:flex><span>        <span style=color:#ff79c6>case</span> <span style=color:#ff79c6>&lt;-</span>ticker.C:
-</span></span><span style=display:flex><span>            <span style=color:#50fa7b>fetchUpdates</span>()
-</span></span><span style=display:flex><span>        <span style=color:#ff79c6>case</span> <span style=color:#ff79c6>&lt;-</span>ctx.<span style=color:#50fa7b>Done</span>():
-</span></span><span style=display:flex><span>            <span style=color:#ff79c6>return</span>
-</span></span><span style=display:flex><span>        }
-</span></span><span style=display:flex><span>    }
-</span></span><span style=display:flex><span>}
-</span></span></code></pre></div><p>The <code>select</code> on <code>ctx.Done()</code> means this goroutine terminates cleanly when the caller cancels. This is the pattern. Always pass context, always select on <code>Done()</code>.</p><h2 id=errgroup-for-parallel-tasks>errgroup for parallel tasks</h2><p>When you need to fan out N parallel operations and collect errors, <code>golang.org/x/sync/errgroup</code> saves a lot of boilerplate.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none><code class=language-go data-lang=go><span style=display:flex><span><span style=color:#8be9fd;font-style:italic>func</span> <span style=color:#50fa7b>fetchAll</span>(ctx context.Context, urls []<span style=color:#8be9fd>string</span>) ([][]<span style=color:#8be9fd>byte</span>, <span style=color:#8be9fd>error</span>) {
-</span></span><span style=display:flex><span>    g, ctx <span style=color:#ff79c6>:=</span> errgroup.<span style=color:#50fa7b>WithContext</span>(ctx)
-</span></span><span style=display:flex><span>    results <span style=color:#ff79c6>:=</span> <span style=color:#8be9fd;font-style:italic>make</span>([][]<span style=color:#8be9fd>byte</span>, <span style=color:#8be9fd;font-style:italic>len</span>(urls))
-</span></span><span style=display:flex><span>
-</span></span><span style=display:flex><span>    <span style=color:#ff79c6>for</span> i, url <span style=color:#ff79c6>:=</span> <span style=color:#ff79c6>range</span> urls {
-</span></span><span style=display:flex><span>        i, url <span style=color:#ff79c6>:=</span> i, url <span style=color:#6272a4>// capture loop variables</span>
-</span></span><span style=display:flex><span>        g.<span style=color:#50fa7b>Go</span>(<span style=color:#8be9fd;font-style:italic>func</span>() <span style=color:#8be9fd>error</span> {
-</span></span><span style=display:flex><span>            body, err <span style=color:#ff79c6>:=</span> <span style=color:#50fa7b>fetch</span>(ctx, url)
-</span></span><span style=display:flex><span>            <span style=color:#ff79c6>if</span> err <span style=color:#ff79c6>!=</span> <span style=color:#ff79c6>nil</span> {
-</span></span><span style=display:flex><span>                <span style=color:#ff79c6>return</span> fmt.<span style=color:#50fa7b>Errorf</span>(<span style=color:#f1fa8c>&#34;fetch %s: %w&#34;</span>, url, err)
-</span></span><span style=display:flex><span>            }
-</span></span><span style=display:flex><span>            results[i] = body
-</span></span><span style=display:flex><span>            <span style=color:#ff79c6>return</span> <span style=color:#ff79c6>nil</span>
-</span></span><span style=display:flex><span>        })
-</span></span><span style=display:flex><span>    }
-</span></span><span style=display:flex><span>
-</span></span><span style=display:flex><span>    <span style=color:#ff79c6>if</span> err <span style=color:#ff79c6>:=</span> g.<span style=color:#50fa7b>Wait</span>(); err <span style=color:#ff79c6>!=</span> <span style=color:#ff79c6>nil</span> {
-</span></span><span style=display:flex><span>        <span style=color:#ff79c6>return</span> <span style=color:#ff79c6>nil</span>, err
-</span></span><span style=display:flex><span>    }
-</span></span><span style=display:flex><span>    <span style=color:#ff79c6>return</span> results, <span style=color:#ff79c6>nil</span>
-</span></span><span style=display:flex><span>}
-</span></span></code></pre></div><p><code>g.Wait()</code> returns the first non-nil error. The context derived from <code>errgroup.WithContext</code> is cancelled on the first error, so other goroutines see cancellation and return early.</p><p>Note the <code>i, url := i, url</code> capture — this is still required in Go versions before 1.22 where loop variables were shared.</p><h2 id=the-leak-detector-mindset>The leak detector mindset</h2><p>Goroutine leaks are insidious. They don&rsquo;t crash; they just slowly consume memory and CPU until something else fails.</p><p>Every time I start a goroutine, I ask: <em>what causes this to stop?</em></p><ul><li>Is it range over a channel? Make sure the channel is closed.</li><li>Is it a select loop? Make sure one case leads to <code>return</code>.</li><li>Is it waiting on a mutex or channel? Make sure the other side always progresses.</li></ul><p><code>goleak</code> (uber-go/goleak) is excellent for catching leaks in tests:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none><code class=language-go data-lang=go><span style=display:flex><span><span style=color:#8be9fd;font-style:italic>func</span> <span style=color:#50fa7b>TestSomething</span>(t <span style=color:#ff79c6>*</span>testing.T) {
-</span></span><span style=display:flex><span>    <span style=color:#ff79c6>defer</span> goleak.<span style=color:#50fa7b>VerifyNone</span>(t)
-</span></span><span style=display:flex><span>    <span style=color:#6272a4>// ... test code</span>
-</span></span><span style=display:flex><span>}
-</span></span></code></pre></div><p>It compares goroutine stacks before and after the test. If any goroutines leaked from your test, it tells you where they were created.</p><h2 id=closing-thought>Closing thought</h2><p>Channels are communication; mutexes are coordination. Use channels when goroutines are passing ownership of data. Use mutexes when goroutines are sharing state they both need to read and write. Mixing them without clear ownership semantics is where most concurrent Go bugs live.</p><p>When in doubt, reach for <code>sync.Mutex</code> before channels. It&rsquo;s less elegant but harder to get wrong.</p></div><footer class=post-footer><div class=post-nav><a href=/blog/blog/system-design-caching/ class="post-nav-link post-nav-next"><span class=post-nav-label>Next →</span>
-<span class=post-nav-title>Caching at Scale: Patterns, Pitfalls, and When Not to Cache</span></a></div><a href=https://adykaaa.github.io/blog/ class=back-link>← Back to all posts</a></footer></article></div></main><footer class=site-footer><div class=footer-inner><span class=footer-copy>© 2026 Adam Toth</span>
-<span class=footer-sep>·</span>
-<span class=footer-links><a href=https://github.com/adykaaa target=_blank rel="noopener noreferrer" class=footer-link>GitHub</a>
-<span class=footer-sep>·</span><a href=https://www.linkedin.com/in/adamtoth0814/ target=_blank rel="noopener noreferrer" class=footer-link>LinkedIn</a></span></div></footer></body></html>
+<!DOCTYPE html>
+<html lang="en-us">
+<head><script src="/blog/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=blog/livereload" data-no-instant defer></script>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<title>Go Concurrency Patterns I Keep Coming Back To · Adam Toth</title>
+<meta name="description" content="Goroutines and channels are easy to learn and easy to misuse. A few patterns I reach for repeatedly in production Go code.">
+<meta name="author" content="Adam Toth">
+<meta name="robots" content="index, follow">
+<meta property="og:title" content="Go Concurrency Patterns I Keep Coming Back To">
+<meta property="og:description" content="Goroutines and channels are easy to learn and easy to misuse. A few patterns I reach for repeatedly in production Go code.">
+<meta property="og:type" content="article">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="http://localhost:1313/blog/css/main.css">
+
+</head>
+<body>
+  <header class="site-header">
+  <nav class="nav">
+    <div class="nav-brand">
+      <a href="http://localhost:1313/blog/" class="brand-link">Adam Toth</a>
+    </div>
+    <ul class="nav-menu">
+      
+      <li class="nav-item">
+        <a href="http://localhost:1313/blog/" class="nav-link">Blog</a>
+      </li>
+      
+      <li class="nav-item">
+        <a href="http://localhost:1313/blog/about/" class="nav-link">About</a>
+      </li>
+      
+    </ul>
+  </nav>
+</header>
+
+  <main class="main">
+    <div class="content-wrap">
+      
+<article class="single-post">
+  <header class="post-header">
+    <div class="post-meta">
+      <time datetime="2025-01-22" class="post-date">January 22, 2025</time>
+      
+      
+      <div class="post-tags">
+        <span class="tag">go</span><span class="tag">concurrency</span><span class="tag">backend</span>
+      </div>
+      
+    </div>
+    <h1 class="single-title">Go Concurrency Patterns I Keep Coming Back To</h1>
+    
+    <p class="single-description">Goroutines and channels are easy to learn and easy to misuse. A few patterns I reach for repeatedly in production Go code.</p>
+    
+  </header>
+
+  <div class="post-content">
+    <p>Go&rsquo;s concurrency model is genuinely one of my favorite things about the language. Goroutines are cheap, channels are expressive, and the <code>go</code> keyword makes parallelism feel almost too easy.</p>
+<p>That &ldquo;almost&rdquo; is doing a lot of work. Here are the patterns I reach for repeatedly, and the failure modes I&rsquo;ve learned to avoid.</p>
+<h2 id="worker-pools">Worker pools</h2>
+<p>The canonical use case: you have N items to process and want to parallelize across M workers without spawning N goroutines.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">processItems</span>(items []Item, workers <span style="color:#8be9fd">int</span>) []Result {
+</span></span><span style="display:flex;"><span>    jobs <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">make</span>(<span style="color:#8be9fd;font-style:italic">chan</span> Item, <span style="color:#8be9fd;font-style:italic">len</span>(items))
+</span></span><span style="display:flex;"><span>    results <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">make</span>(<span style="color:#8be9fd;font-style:italic">chan</span> Result, <span style="color:#8be9fd;font-style:italic">len</span>(items))
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#6272a4">// Start workers</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">var</span> wg sync.WaitGroup
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">for</span> i <span style="color:#ff79c6">:=</span> <span style="color:#bd93f9">0</span>; i &lt; workers; i<span style="color:#ff79c6">++</span> {
+</span></span><span style="display:flex;"><span>        wg.<span style="color:#50fa7b">Add</span>(<span style="color:#bd93f9">1</span>)
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">go</span> <span style="color:#8be9fd;font-style:italic">func</span>() {
+</span></span><span style="display:flex;"><span>            <span style="color:#ff79c6">defer</span> wg.<span style="color:#50fa7b">Done</span>()
+</span></span><span style="display:flex;"><span>            <span style="color:#ff79c6">for</span> item <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">range</span> jobs {
+</span></span><span style="display:flex;"><span>                results <span style="color:#ff79c6">&lt;-</span> <span style="color:#50fa7b">process</span>(item)
+</span></span><span style="display:flex;"><span>            }
+</span></span><span style="display:flex;"><span>        }()
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#6272a4">// Send jobs</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">for</span> _, item <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">range</span> items {
+</span></span><span style="display:flex;"><span>        jobs <span style="color:#ff79c6">&lt;-</span> item
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">close</span>(jobs)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#6272a4">// Wait and close results</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">go</span> <span style="color:#8be9fd;font-style:italic">func</span>() {
+</span></span><span style="display:flex;"><span>        wg.<span style="color:#50fa7b">Wait</span>()
+</span></span><span style="display:flex;"><span>        <span style="color:#8be9fd;font-style:italic">close</span>(results)
+</span></span><span style="display:flex;"><span>    }()
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#8be9fd;font-style:italic">var</span> out []Result
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">for</span> r <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">range</span> results {
+</span></span><span style="display:flex;"><span>        out = <span style="color:#8be9fd;font-style:italic">append</span>(out, r)
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> out
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>Key details: close <code>jobs</code> to signal workers to stop. Use a separate goroutine to close <code>results</code> after the WaitGroup drains, so the consumer loop terminates.</p>
+<h2 id="context-for-cancellation">Context for cancellation</h2>
+<p>Never start a long-running goroutine without a way to stop it. <code>context.Context</code> is the idiomatic mechanism.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">pollForUpdates</span>(ctx context.Context, interval time.Duration) {
+</span></span><span style="display:flex;"><span>    ticker <span style="color:#ff79c6">:=</span> time.<span style="color:#50fa7b">NewTicker</span>(interval)
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">defer</span> ticker.<span style="color:#50fa7b">Stop</span>()
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">for</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">select</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>ticker.C:
+</span></span><span style="display:flex;"><span>            <span style="color:#50fa7b">fetchUpdates</span>()
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">case</span> <span style="color:#ff79c6">&lt;-</span>ctx.<span style="color:#50fa7b">Done</span>():
+</span></span><span style="display:flex;"><span>            <span style="color:#ff79c6">return</span>
+</span></span><span style="display:flex;"><span>        }
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>The <code>select</code> on <code>ctx.Done()</code> means this goroutine terminates cleanly when the caller cancels. This is the pattern. Always pass context, always select on <code>Done()</code>.</p>
+<h2 id="errgroup-for-parallel-tasks">errgroup for parallel tasks</h2>
+<p>When you need to fan out N parallel operations and collect errors, <code>golang.org/x/sync/errgroup</code> saves a lot of boilerplate.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">fetchAll</span>(ctx context.Context, urls []<span style="color:#8be9fd">string</span>) ([][]<span style="color:#8be9fd">byte</span>, <span style="color:#8be9fd">error</span>) {
+</span></span><span style="display:flex;"><span>    g, ctx <span style="color:#ff79c6">:=</span> errgroup.<span style="color:#50fa7b">WithContext</span>(ctx)
+</span></span><span style="display:flex;"><span>    results <span style="color:#ff79c6">:=</span> <span style="color:#8be9fd;font-style:italic">make</span>([][]<span style="color:#8be9fd">byte</span>, <span style="color:#8be9fd;font-style:italic">len</span>(urls))
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">for</span> i, url <span style="color:#ff79c6">:=</span> <span style="color:#ff79c6">range</span> urls {
+</span></span><span style="display:flex;"><span>        i, url <span style="color:#ff79c6">:=</span> i, url <span style="color:#6272a4">// capture loop variables</span>
+</span></span><span style="display:flex;"><span>        g.<span style="color:#50fa7b">Go</span>(<span style="color:#8be9fd;font-style:italic">func</span>() <span style="color:#8be9fd">error</span> {
+</span></span><span style="display:flex;"><span>            body, err <span style="color:#ff79c6">:=</span> <span style="color:#50fa7b">fetch</span>(ctx, url)
+</span></span><span style="display:flex;"><span>            <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>                <span style="color:#ff79c6">return</span> fmt.<span style="color:#50fa7b">Errorf</span>(<span style="color:#f1fa8c">&#34;fetch %s: %w&#34;</span>, url, err)
+</span></span><span style="display:flex;"><span>            }
+</span></span><span style="display:flex;"><span>            results[i] = body
+</span></span><span style="display:flex;"><span>            <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>
+</span></span><span style="display:flex;"><span>        })
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">if</span> err <span style="color:#ff79c6">:=</span> g.<span style="color:#50fa7b">Wait</span>(); err <span style="color:#ff79c6">!=</span> <span style="color:#ff79c6">nil</span> {
+</span></span><span style="display:flex;"><span>        <span style="color:#ff79c6">return</span> <span style="color:#ff79c6">nil</span>, err
+</span></span><span style="display:flex;"><span>    }
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">return</span> results, <span style="color:#ff79c6">nil</span>
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p><code>g.Wait()</code> returns the first non-nil error. The context derived from <code>errgroup.WithContext</code> is cancelled on the first error, so other goroutines see cancellation and return early.</p>
+<p>Note the <code>i, url := i, url</code> capture — this is still required in Go versions before 1.22 where loop variables were shared.</p>
+<h2 id="the-leak-detector-mindset">The leak detector mindset</h2>
+<p>Goroutine leaks are insidious. They don&rsquo;t crash; they just slowly consume memory and CPU until something else fails.</p>
+<p>Every time I start a goroutine, I ask: <em>what causes this to stop?</em></p>
+<ul>
+<li>Is it range over a channel? Make sure the channel is closed.</li>
+<li>Is it a select loop? Make sure one case leads to <code>return</code>.</li>
+<li>Is it waiting on a mutex or channel? Make sure the other side always progresses.</li>
+</ul>
+<p><code>goleak</code> (uber-go/goleak) is excellent for catching leaks in tests:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none;"><code class="language-go" data-lang="go"><span style="display:flex;"><span><span style="color:#8be9fd;font-style:italic">func</span> <span style="color:#50fa7b">TestSomething</span>(t <span style="color:#ff79c6">*</span>testing.T) {
+</span></span><span style="display:flex;"><span>    <span style="color:#ff79c6">defer</span> goleak.<span style="color:#50fa7b">VerifyNone</span>(t)
+</span></span><span style="display:flex;"><span>    <span style="color:#6272a4">// ... test code</span>
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>It compares goroutine stacks before and after the test. If any goroutines leaked from your test, it tells you where they were created.</p>
+<h2 id="closing-thought">Closing thought</h2>
+<p>Channels are communication; mutexes are coordination. Use channels when goroutines are passing ownership of data. Use mutexes when goroutines are sharing state they both need to read and write. Mixing them without clear ownership semantics is where most concurrent Go bugs live.</p>
+<p>When in doubt, reach for <code>sync.Mutex</code> before channels. It&rsquo;s less elegant but harder to get wrong.</p>
+
+  </div>
+
+  <footer class="post-footer">
+    <div class="post-nav">
+      
+      
+      <a href="/blog/blog/system-design-caching/" class="post-nav-link post-nav-next">
+        <span class="post-nav-label">Next →</span>
+        <span class="post-nav-title">Caching at Scale: Patterns, Pitfalls, and When Not to Cache</span>
+      </a>
+      
+    </div>
+    <a href="http://localhost:1313/blog/" class="back-link">← Back to all posts</a>
+  </footer>
+</article>
+
+    </div>
+  </main>
+  <footer class="site-footer">
+  <div class="footer-inner">
+    <span class="footer-copy">© 2026 Adam Toth</span>
+    <span class="footer-sep">·</span>
+    <span class="footer-links">
+      <a href="https://github.com/adykaaa" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub</a>
+      <span class="footer-sep">·</span><a href="https://www.linkedin.com/in/adamtoth0814/" target="_blank" rel="noopener noreferrer" class="footer-link">LinkedIn</a>
+    </span>
+  </div>
+</footer>
+
+</body>
+</html>

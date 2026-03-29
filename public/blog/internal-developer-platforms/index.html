@@ -1,5 +1,126 @@
-<!doctype html><html lang=en-us><head><meta charset=UTF-8><meta name=viewport content="width=device-width,initial-scale=1"><meta http-equiv=X-UA-Compatible content="IE=edge"><title>What Makes a Good Internal Developer Platform? · Adam Toth</title><meta name=description content="Platform engineering is having a moment. But most IDPs fail for the same predictable reasons. Here's what I've learned about building platforms developers actually want to use."><meta name=author content="Adam Toth"><meta name=robots content="index, follow"><meta property="og:title" content="What Makes a Good Internal Developer Platform?"><meta property="og:description" content="Platform engineering is having a moment. But most IDPs fail for the same predictable reasons. Here's what I've learned about building platforms developers actually want to use."><meta property="og:type" content="article"><link rel=preconnect href=https://fonts.googleapis.com><link rel=preconnect href=https://fonts.gstatic.com crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel=stylesheet><link rel=stylesheet href=https://adykaaa.github.io/blog/css/main.css></head><body><header class=site-header><nav class=nav><div class=nav-brand><a href=https://adykaaa.github.io/ class=brand-link>Adam Toth</a></div><ul class=nav-menu><li class=nav-item><a href=https://adykaaa.github.io/blog/blog/ class=nav-link>Blog</a></li><li class=nav-item><a href=https://adykaaa.github.io/blog/about/ class=nav-link>About</a></li></ul></nav></header><main class=main><div class=content-wrap><article class=single-post><header class=post-header><div class=post-meta><time datetime=2025-03-15 class=post-date>March 15, 2025</time><div class=post-tags><span class=tag>platform engineering</span><span class=tag>developer experience</span><span class=tag>kubernetes</span></div></div><h1 class=single-title>What Makes a Good Internal Developer Platform?</h1><p class=single-description>Platform engineering is having a moment. But most IDPs fail for the same predictable reasons. Here's what I've learned about building platforms developers actually want to use.</p></header><div class=post-content><p>Platform engineering is having a moment. Every company above a certain size is spinning up a &ldquo;platform team,&rdquo; every conference has a track dedicated to Internal Developer Platforms, and everyone has an opinion.</p><p>Most IDPs fail anyway.</p><p>After working on platform tooling for a while, I&rsquo;ve noticed the failures cluster around a few predictable patterns. This post is my attempt to articulate what separates a platform developers love from one they route around.</p><h2 id=the-golden-path-problem>The golden path problem</h2><p>The most common framing I hear is: &ldquo;We need to build golden paths.&rdquo; The idea is sound — opinionated, well-lit roads that let developers ship without thinking about infrastructure. Pick one deployment mechanism, one observability stack, one networking model, and make it excellent.</p><p>The failure mode is building a golden path that&rsquo;s actually a golden cage.</p><p>A good golden path offers <strong>escape hatches</strong>. It should be easy to do the 80% case without thinking, and possible (if harder) to do the 20% case that doesn&rsquo;t fit the mold. The moment your platform becomes &ldquo;use this or file a ticket,&rdquo; you&rsquo;ve lost developer trust.</p><h2 id=paved-roads-need-owners>Paved roads need owners</h2><p>Infrastructure as code made it easy to spin up new services. It made it equally easy to spin up services that nobody maintains.</p><p>The platforms I&rsquo;ve seen succeed have a clear answer to: <em>who is responsible for this component, and how do I reach them?</em></p><p>Service catalogs like Backstage exist to answer exactly this. They&rsquo;re not glamorous, but a well-maintained catalog is foundational. Without it, your golden path leads into a fog of undocumented dependencies.</p><h2 id=observability-is-a-feature-not-an-afterthought>Observability is a feature, not an afterthought</h2><p>A platform that ships services into the void isn&rsquo;t a platform — it&rsquo;s a deployment tool. Developers need to understand what their services are doing in production from day one.</p><p>This means:</p><ul><li>Structured logging by default, shipped to a searchable backend</li><li>Metrics exposed without configuration</li><li>Distributed tracing that works across service boundaries</li><li>Dashboards that exist before anyone asks for them</li></ul><p>The goal is to make the right thing the default thing. If observability requires a JIRA ticket and a two-week wait, it doesn&rsquo;t exist.</p><h2 id=the-cognitive-load-budget>The cognitive load budget</h2><p>Every abstraction you add to your platform costs developers something: learning time, mental overhead, debugging surface area. That cost is real and compounds.</p><p>The best platforms obsess over reducing cognitive load:</p><ul><li>Fewer concepts to learn</li><li>Error messages that tell you what to do next, not just what went wrong</li><li>Documentation that&rsquo;s findable and current</li><li><code>platform help</code> that actually helps</li></ul><p>Measure your platform&rsquo;s complexity like you measure latency. Instrument it. When you add a new concept, ask: what are we removing to keep the budget flat?</p><h2 id=closing-thoughts>Closing thoughts</h2><p>The best internal developer platform I&rsquo;ve seen described itself not as a product, but as a &ldquo;reliability substrate.&rdquo; It aimed to be load-bearing and invisible. Developers didn&rsquo;t think about it; they just shipped.</p><p>That&rsquo;s the bar. It&rsquo;s higher than it sounds.</p></div><footer class=post-footer><div class=post-nav><a href=/blog/blog/system-design-caching/ class="post-nav-link post-nav-prev"><span class=post-nav-label>← Previous</span>
-<span class=post-nav-title>Caching at Scale: Patterns, Pitfalls, and When Not to Cache</span></a></div><a href=https://adykaaa.github.io/blog/ class=back-link>← Back to all posts</a></footer></article></div></main><footer class=site-footer><div class=footer-inner><span class=footer-copy>© 2026 Adam Toth</span>
-<span class=footer-sep>·</span>
-<span class=footer-links><a href=https://github.com/adykaaa target=_blank rel="noopener noreferrer" class=footer-link>GitHub</a>
-<span class=footer-sep>·</span><a href=https://www.linkedin.com/in/adamtoth0814/ target=_blank rel="noopener noreferrer" class=footer-link>LinkedIn</a></span></div></footer></body></html>
+<!DOCTYPE html>
+<html lang="en-us">
+<head><script src="/blog/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=blog/livereload" data-no-instant defer></script>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<title>What Makes a Good Internal Developer Platform? · Adam Toth</title>
+<meta name="description" content="Platform engineering is having a moment. But most IDPs fail for the same predictable reasons. Here&#39;s what I&#39;ve learned about building platforms developers actually want to use.">
+<meta name="author" content="Adam Toth">
+<meta name="robots" content="index, follow">
+<meta property="og:title" content="What Makes a Good Internal Developer Platform?">
+<meta property="og:description" content="Platform engineering is having a moment. But most IDPs fail for the same predictable reasons. Here&#39;s what I&#39;ve learned about building platforms developers actually want to use.">
+<meta property="og:type" content="article">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="http://localhost:1313/blog/css/main.css">
+
+</head>
+<body>
+  <header class="site-header">
+  <nav class="nav">
+    <div class="nav-brand">
+      <a href="http://localhost:1313/blog/" class="brand-link">Adam Toth</a>
+    </div>
+    <ul class="nav-menu">
+      
+      <li class="nav-item">
+        <a href="http://localhost:1313/blog/" class="nav-link">Blog</a>
+      </li>
+      
+      <li class="nav-item">
+        <a href="http://localhost:1313/blog/about/" class="nav-link">About</a>
+      </li>
+      
+    </ul>
+  </nav>
+</header>
+
+  <main class="main">
+    <div class="content-wrap">
+      
+<article class="single-post">
+  <header class="post-header">
+    <div class="post-meta">
+      <time datetime="2025-03-15" class="post-date">March 15, 2025</time>
+      
+      
+      <div class="post-tags">
+        <span class="tag">platform engineering</span><span class="tag">developer experience</span><span class="tag">kubernetes</span>
+      </div>
+      
+    </div>
+    <h1 class="single-title">What Makes a Good Internal Developer Platform?</h1>
+    
+    <p class="single-description">Platform engineering is having a moment. But most IDPs fail for the same predictable reasons. Here&#39;s what I&#39;ve learned about building platforms developers actually want to use.</p>
+    
+  </header>
+
+  <div class="post-content">
+    <p>Platform engineering is having a moment. Every company above a certain size is spinning up a &ldquo;platform team,&rdquo; every conference has a track dedicated to Internal Developer Platforms, and everyone has an opinion.</p>
+<p>Most IDPs fail anyway.</p>
+<p>After working on platform tooling for a while, I&rsquo;ve noticed the failures cluster around a few predictable patterns. This post is my attempt to articulate what separates a platform developers love from one they route around.</p>
+<h2 id="the-golden-path-problem">The golden path problem</h2>
+<p>The most common framing I hear is: &ldquo;We need to build golden paths.&rdquo; The idea is sound — opinionated, well-lit roads that let developers ship without thinking about infrastructure. Pick one deployment mechanism, one observability stack, one networking model, and make it excellent.</p>
+<p>The failure mode is building a golden path that&rsquo;s actually a golden cage.</p>
+<p>A good golden path offers <strong>escape hatches</strong>. It should be easy to do the 80% case without thinking, and possible (if harder) to do the 20% case that doesn&rsquo;t fit the mold. The moment your platform becomes &ldquo;use this or file a ticket,&rdquo; you&rsquo;ve lost developer trust.</p>
+<h2 id="paved-roads-need-owners">Paved roads need owners</h2>
+<p>Infrastructure as code made it easy to spin up new services. It made it equally easy to spin up services that nobody maintains.</p>
+<p>The platforms I&rsquo;ve seen succeed have a clear answer to: <em>who is responsible for this component, and how do I reach them?</em></p>
+<p>Service catalogs like Backstage exist to answer exactly this. They&rsquo;re not glamorous, but a well-maintained catalog is foundational. Without it, your golden path leads into a fog of undocumented dependencies.</p>
+<h2 id="observability-is-a-feature-not-an-afterthought">Observability is a feature, not an afterthought</h2>
+<p>A platform that ships services into the void isn&rsquo;t a platform — it&rsquo;s a deployment tool. Developers need to understand what their services are doing in production from day one.</p>
+<p>This means:</p>
+<ul>
+<li>Structured logging by default, shipped to a searchable backend</li>
+<li>Metrics exposed without configuration</li>
+<li>Distributed tracing that works across service boundaries</li>
+<li>Dashboards that exist before anyone asks for them</li>
+</ul>
+<p>The goal is to make the right thing the default thing. If observability requires a JIRA ticket and a two-week wait, it doesn&rsquo;t exist.</p>
+<h2 id="the-cognitive-load-budget">The cognitive load budget</h2>
+<p>Every abstraction you add to your platform costs developers something: learning time, mental overhead, debugging surface area. That cost is real and compounds.</p>
+<p>The best platforms obsess over reducing cognitive load:</p>
+<ul>
+<li>Fewer concepts to learn</li>
+<li>Error messages that tell you what to do next, not just what went wrong</li>
+<li>Documentation that&rsquo;s findable and current</li>
+<li><code>platform help</code> that actually helps</li>
+</ul>
+<p>Measure your platform&rsquo;s complexity like you measure latency. Instrument it. When you add a new concept, ask: what are we removing to keep the budget flat?</p>
+<h2 id="closing-thoughts">Closing thoughts</h2>
+<p>The best internal developer platform I&rsquo;ve seen described itself not as a product, but as a &ldquo;reliability substrate.&rdquo; It aimed to be load-bearing and invisible. Developers didn&rsquo;t think about it; they just shipped.</p>
+<p>That&rsquo;s the bar. It&rsquo;s higher than it sounds.</p>
+
+  </div>
+
+  <footer class="post-footer">
+    <div class="post-nav">
+      
+      <a href="/blog/blog/system-design-caching/" class="post-nav-link post-nav-prev">
+        <span class="post-nav-label">← Previous</span>
+        <span class="post-nav-title">Caching at Scale: Patterns, Pitfalls, and When Not to Cache</span>
+      </a>
+      
+      
+    </div>
+    <a href="http://localhost:1313/blog/" class="back-link">← Back to all posts</a>
+  </footer>
+</article>
+
+    </div>
+  </main>
+  <footer class="site-footer">
+  <div class="footer-inner">
+    <span class="footer-copy">© 2026 Adam Toth</span>
+    <span class="footer-sep">·</span>
+    <span class="footer-links">
+      <a href="https://github.com/adykaaa" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub</a>
+      <span class="footer-sep">·</span><a href="https://www.linkedin.com/in/adamtoth0814/" target="_blank" rel="noopener noreferrer" class="footer-link">LinkedIn</a>
+    </span>
+  </div>
+</footer>
+
+</body>
+</html>
