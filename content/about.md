@@ -5,16 +5,14 @@ layout: "single"
 
 <div class="about-content">
 
-Hi, I'm **Adam Toth** — a platform engineer based in Europe.
-
-I work on building and scaling internal developer platforms, cloud infrastructure, and the tooling that helps engineering teams ship software reliably and fast. I believe great platform engineering is invisible: developers shouldn't have to think about it, they should just move. I also believe platform engineers must have a great understanding of software engineering principles in general -- so this blog is not just about my thoughts, but also some things I'm learning along the way.
+I work on a lot of things honestly... but this page is not going to be deep dives into that. I'll post some of my high level thoughts about platform engineering, but I'll use this blog to
+note down some of my learnings along the way -- be it Rust, Go, K8s controllers, or anything.
 
 ## What I work on
 
 I spend most of my time in the intersection of:
 
-- **Platform & Infrastructure Engineering** — Kubernetes, cloud-native tooling, GitOps, IaC
-- **Distributed Systems** — service meshes, observability, reliability patterns
+- **Platform & Infrastructure Engineering** — Kubernetes, cloud-native tooling, GitOps, IaC, Pulumi, etc.
 - **Developer Experience** — internal platforms, CI/CD, making the boring stuff fast
 - **Backend Engineering** — I've been mostly using Go, but now I've decided to jump into and learn Rust!
 
