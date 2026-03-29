@@ -6,7 +6,7 @@ title = "Adam Toth"
   author = "Adam Toth"
   description = "My thoughts on software, platform engineering, coding... and everything in general."
   subtitle = "Software & Platform Engineer"
-  avatar = "/images/avatar.png"
+  avatar = "/images/avatar.jpg"
   githubUrl = "https://github.com/adykaaa"
   linkedinUrl = "https://www.linkedin.com/in/adamtoth0814/"
 
@@ -14,7 +14,7 @@ title = "Adam Toth"
   [[menu.main]]
     identifier = "blog"
     name = "Blog"
-    url = "/blog/"
+    url = "/"
     weight = 10
   [[menu.main]]
     identifier = "about"

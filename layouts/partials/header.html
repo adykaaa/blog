@@ -1,7 +1,7 @@
 <header class="site-header">
   <nav class="nav">
     <div class="nav-brand">
-      <a href="{{ "/" | absURL }}" class="brand-link">{{ .Site.Title }}</a>
+      <a href="{{ .Site.BaseURL }}" class="brand-link">{{ .Site.Title }}</a>
     </div>
     <ul class="nav-menu">
       {{ range .Site.Menus.main }}

@@ -28,12 +28,10 @@
 
 <section class="recent-posts">
   <div class="section-header">
-    <h2 class="section-title">Recent Posts</h2>
-    <a href="{{ "/blog/" | absURL }}" class="see-all">All posts →</a>
+    <h2 class="section-title">Posts</h2>
   </div>
 
   {{ $posts := where .Site.RegularPages "Section" "blog" }}
-  {{ $posts = $posts | first 5 }}
   {{ if $posts }}
   <div class="post-list">
     {{ range $posts }}
