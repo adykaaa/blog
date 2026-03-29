@@ -4,26 +4,8 @@ title = "Adam Toth"
 
 [params]
   author = "Adam Toth"
-  description = "Thoughts on code, software, and the craft of building things."
+  description = "My thoughts on sofware, platform engineering, coding... and everything in general."
 
-[menu]
-  [[menu.main]]
-    name = "Home"
-    url = "/"
-    weight = 1
-  [[menu.main]]
-    name = "Blog"
-    url = "/posts/"
-    weight = 2
-  [[menu.main]]
-    name = "About"
-    url = "/about/"
-    weight = 3
-
-[markup]
-  [markup.highlight]
-    style = "dracula"
-    lineNos = false
-    noClasses = true
-  [markup.goldmark.renderer]
-    unsafe = true
+[caches]
+    [caches.images]
+    dir = ':cacheDir/images'
