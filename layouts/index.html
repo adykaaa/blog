@@ -1,0 +1,25 @@
+{{ define "main" }}
+<section class="hero">
+  <div class="hero-inner">
+    <span class="hero-eyebrow">Software engineer</span>
+    <h1 class="hero-title">Hi, I'm<br><em>Adam Tóth</em></h1>
+    <p class="hero-desc">{{ site.Params.description }}</p>
+    <a href="/posts/" class="btn">Read the blog →</a>
+  </div>
+</section>
+
+<section class="recent-posts">
+  <h2 class="section-title">Recent posts</h2>
+  <ul class="post-list">
+    {{ range first 5 (where site.RegularPages "Section" "posts") }}
+    <li class="post-item">
+      <a href="{{ .RelPermalink }}" class="post-link">
+        <span class="post-title">{{ .Title }}</span>
+        <span class="post-date">{{ .Date.Format "Jan 2, 2006" }}</span>
+      </a>
+    </li>
+    {{ end }}
+  </ul>
+  <a href="/posts/" class="all-posts-link">All posts →</a>
+</section>
+{{ end }}

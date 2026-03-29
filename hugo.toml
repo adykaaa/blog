@@ -1,0 +1,30 @@
+baseURL = "https://adamtoth.github.io/"
+languageCode = "en-us"
+title = "Adam Tóth"
+theme = ""
+
+[params]
+  author = "Adam Tóth"
+  description = "Thoughts on code, software, and the craft of building things."
+
+[menu]
+  [[menu.main]]
+    name = "Home"
+    url = "/"
+    weight = 1
+  [[menu.main]]
+    name = "Blog"
+    url = "/posts/"
+    weight = 2
+  [[menu.main]]
+    name = "About"
+    url = "/about/"
+    weight = 3
+
+[markup]
+  [markup.highlight]
+    style = "dracula"
+    lineNos = false
+    noClasses = true
+  [markup.goldmark.renderer]
+    unsafe = true
