@@ -35,6 +35,6 @@ I play a lot of CS2, spend time with my family, and learn more things.
 
 ## Get in touch
 
-The best ways to reach me is on [LinkedIn](https://www.linkedin.com/in/adamtoth0814/). Feel free to say hi anytime :)
+The best way to reach me is on [LinkedIn](https://www.linkedin.com/in/adamtoth0814/). Feel free to say hi anytime :)
 
 </div>
