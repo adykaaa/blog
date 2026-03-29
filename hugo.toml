@@ -1,4 +1,4 @@
-baseURL = "https://adykaaa.github.io/blog/"
+baseURL = "https://adykaaa.github.io/blog"
 languageCode = "en-us"
 title = "Adam Toth"
 
@@ -13,11 +13,11 @@ title = "Adam Toth"
     weight = 1
 [[menu.main]]
     name = "Blog"
-    url = "/blog/posts/"
+    url = "/posts"
     weight = 2
 [[menu.main]]
     name = "About"
-    url = "/blog/about/"
+    url = "/about"
     weight = 3
 
 [markup]
