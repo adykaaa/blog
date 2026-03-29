@@ -1,0 +1,43 @@
+{{ define "main" }}
+<article class="single-post">
+  <header class="post-header">
+    <div class="post-meta">
+      <time datetime="{{ .Date.Format "2006-01-02" }}" class="post-date">{{ .Date.Format "January 2, 2006" }}</time>
+      {{ with .Params.readingTime }}
+      <span class="post-reading-time">· {{ . }} min read</span>
+      {{ end }}
+      {{ with .Params.tags }}
+      <div class="post-tags">
+        {{ range . }}<span class="tag">{{ . }}</span>{{ end }}
+      </div>
+      {{ end }}
+    </div>
+    <h1 class="single-title">{{ .Title }}</h1>
+    {{ with .Description }}
+    <p class="single-description">{{ . }}</p>
+    {{ end }}
+  </header>
+
+  <div class="post-content">
+    {{ .Content }}
+  </div>
+
+  <footer class="post-footer">
+    <div class="post-nav">
+      {{ with .PrevInSection }}
+      <a href="{{ .RelPermalink }}" class="post-nav-link post-nav-prev">
+        <span class="post-nav-label">← Previous</span>
+        <span class="post-nav-title">{{ .Title }}</span>
+      </a>
+      {{ end }}
+      {{ with .NextInSection }}
+      <a href="{{ .RelPermalink }}" class="post-nav-link post-nav-next">
+        <span class="post-nav-label">Next →</span>
+        <span class="post-nav-title">{{ .Title }}</span>
+      </a>
+      {{ end }}
+    </div>
+    <a href="{{ "/blog/" | absURL }}" class="back-link">← Back to all posts</a>
+  </footer>
+</article>
+{{ end }}

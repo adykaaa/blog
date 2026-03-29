@@ -1,0 +1,10 @@
+<footer class="site-footer">
+  <div class="footer-inner">
+    <span class="footer-copy">© {{ now.Year }} {{ .Site.Params.author }}</span>
+    <span class="footer-sep">·</span>
+    <span class="footer-links">
+      {{ with .Site.Params.githubUrl }}<a href="{{ . }}" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub</a>{{ end }}
+      {{ with .Site.Params.linkedinUrl }}<span class="footer-sep">·</span><a href="{{ . }}" target="_blank" rel="noopener noreferrer" class="footer-link">LinkedIn</a>{{ end }}
+    </span>
+  </div>
+</footer>

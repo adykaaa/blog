@@ -4,8 +4,33 @@ title = "Adam Toth"
 
 [params]
   author = "Adam Toth"
-  description = "My thoughts on sofware, platform engineering, coding... and everything in general."
+  description = "My thoughts on software, platform engineering, coding... and everything in general."
+  subtitle = "Software & Platform Engineer"
+  avatar = "/images/avatar.png"
+  githubUrl = "https://github.com/adykaaa"
+  linkedinUrl = "https://www.linkedin.com/in/adamtoth0814/"
+
+[menu]
+  [[menu.main]]
+    identifier = "blog"
+    name = "Blog"
+    url = "/blog/"
+    weight = 10
+  [[menu.main]]
+    identifier = "about"
+    name = "About"
+    url = "/about/"
+    weight = 20
+
+[markup]
+  [markup.highlight]
+    style = "dracula"
+    lineNos = false
+    noClasses = true
+    tabWidth = 2
+  [markup.goldmark.renderer]
+    unsafe = true
 
 [caches]
-    [caches.images]
+  [caches.images]
     dir = ':cacheDir/images'
