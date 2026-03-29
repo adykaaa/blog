@@ -7,17 +7,17 @@ title = "Adam Toth"
   description = "Thoughts on code, software, and the craft of building things."
 
 [menu]
-[[menu.main]]
+  [[menu.main]]
     name = "Home"
-    url = "/blog"
+    url = "/"
     weight = 1
-[[menu.main]]
+  [[menu.main]]
     name = "Blog"
-    url = "/blog/posts"
+    url = "/posts/"
     weight = 2
-[[menu.main]]
+  [[menu.main]]
     name = "About"
-    url = "/blog/about"
+    url = "/about/"
     weight = 3
 
 [markup]
