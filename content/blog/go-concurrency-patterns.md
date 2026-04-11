@@ -1,5 +1,5 @@
 ---
-title: "Go Concurrency Patterns I Keep Coming Back To"
+title: "[EXAMPLE] [AI GENERATED] Go Concurrency Patterns I Keep Coming Back To"
 date: 2025-01-22
 description: "Goroutines and channels are easy to learn and easy to misuse. A few patterns I reach for repeatedly in production Go code."
 tags: ["go", "concurrency", "backend"]
@@ -110,7 +110,7 @@ Note the `i, url := i, url` capture — this is still required in Go versions be
 
 Goroutine leaks are insidious. They don't crash; they just slowly consume memory and CPU until something else fails.
 
-Every time I start a goroutine, I ask: *what causes this to stop?*
+Every time I start a goroutine, I ask: _what causes this to stop?_
 
 - Is it range over a channel? Make sure the channel is closed.
 - Is it a select loop? Make sure one case leads to `return`.

@@ -1,5 +1,5 @@
 ---
-title: "Caching at Scale: Patterns, Pitfalls, and When Not to Cache"
+title: "[EXAMPLE] [AI GENERATED] Caching at Scale: Patterns, Pitfalls, and When Not to Cache"
 date: 2025-02-10
 description: "Caching is one of the most powerful tools in distributed systems design and one of the easiest to misuse. A practical look at cache strategies, invalidation, and the cases where you're better off without one."
 tags: ["system design", "caching", "distributed systems"]
@@ -14,7 +14,7 @@ The joke is old but the pain is evergreen. Caching is one of the most effective 
 
 The motivation is simple: compute and I/O take time. If you've already done a computation, or fetched a value from a database, and the answer hasn't changed, why do it again?
 
-The tradeoff is consistency. A cache is, by definition, a stale copy of the truth. Every caching strategy is an answer to the question: *how stale can I afford to be, and for how long?*
+The tradeoff is consistency. A cache is, by definition, a stale copy of the truth. Every caching strategy is an answer to the question: _how stale can I afford to be, and for how long?_
 
 ## Cache-aside (lazy loading)
 
@@ -54,7 +54,7 @@ This is how most database buffer pools work. It's also how you lose data if your
 
 ## TTL is not invalidation
 
-Setting a TTL of five minutes doesn't mean your cache is consistent within five minutes. It means it's *eventually* consistent with a five-minute bound — in the happy path, with no failures.
+Setting a TTL of five minutes doesn't mean your cache is consistent within five minutes. It means it's _eventually_ consistent with a five-minute bound — in the happy path, with no failures.
 
 Real invalidation requires either:
 

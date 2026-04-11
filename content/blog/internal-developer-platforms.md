@@ -1,5 +1,5 @@
 ---
-title: "What Makes a Good Internal Developer Platform?"
+title: "[EXAMPLE] [AI GENERATED] What Makes a Good Internal Developer Platform?"
 date: 2025-03-15
 description: "Platform engineering is having a moment. But most IDPs fail for the same predictable reasons. Here's what I've learned about building platforms developers actually want to use."
 tags: ["platform engineering", "developer experience", "kubernetes"]
