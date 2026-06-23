@@ -1,6 +1,7 @@
 baseURL = "https://adykaaa.github.io/blog"
 languageCode = "en-us"
 title = "Adam Toth"
+buildFuture = true
 
 [params]
   author = "Adam Toth"
