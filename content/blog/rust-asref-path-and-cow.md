@@ -33,7 +33,7 @@ We could go with a `&str` which is a reference to a string slice. What this mean
 let thing = "Hello world!";
 ```
 
-the type of `thing` is going to be `&str` -- so a _reference_ to a string slice. The `&str` only contains a pointer to some **bytes** (the actual characters on the heap), and a **length** (the length of said bytes).
+the type of `thing` is going to be `&str` -- so a _reference_ to a string slice. The `&str` only contains a pointer to some **bytes** (the actual characters), and a **length** (the length of said bytes).
 This is pretty cool because the size of this is only going to be (on a typical 64-bit machine anyways) **16 bytes**, regardless of the actual data it holds.
 I immediately had **two** follow up questions that needed to be answered. If I do this then:
 
@@ -94,7 +94,7 @@ fn create_collector() -> Collector {
 }
 ```
 
-This would be a disaster.Inside `create_collector`, we create a String called `path`. Then we store a reference to that string inside `Collector` but when the function ends, path is dropped, its heap allocation is freed.
+This would be a disaster. Inside `create_collector`, we create a String called `path`. Then we store a reference to that string inside `Collector` but when the function returns, `path` is dropped which means that its heap allocation is **freed**.
 
 So the returned `Collector` would contain a reference to memory that no longer exists:
 
@@ -106,7 +106,8 @@ Collector
     "/var/log/pods"  // already dropped
 ```
 
-So when we write a struct containing a reference, we have to tell Rust that the struct is tied to the lifetime of the thing it references:
+which would lead to undefined behavior, as we would be accessing a memory location that has been freed.
+So when we deal with a struct that contains a **reference**, we have to tell Rust that the struct is tied to the lifetime of the thing it references:
 
 ```rust
 pub struct Collector<'a> {
@@ -114,8 +115,9 @@ pub struct Collector<'a> {
 }
 ```
 
-This means **`Collector<'a>` may not live longer than the string slice it stores since they have the same 'a lifetimes.**
-This is already looking confusing, but to add insult to injury, a simple `impl` block would look like this:
+This means **`Collector<'a>` may not live longer than the string slice it stores since they have the same 'a lifetimes.** -- aka. `directory_path` our struct field cannot be dropped earlier than our Collector, and vice-versa.
+
+This is already looking confusing btw, but to add insult to injury, a simple `impl` block would look like this:
 
 ```rust
 impl<'a> Collector<'a> {
@@ -123,6 +125,8 @@ impl<'a> Collector<'a> {
 }
 ```
 
-because we need to reference the lifetime(s) `'a` in these as well. Damn, all this for a struct with 1 field? No way!
+because we need to reference the lifetime(s) `'a` in these as well. Damn, all this for a struct with 1 field? No way! Let's look at other solutions.
+
+### Using generics -> AsRef<Path>
 
 ## Closing thoughts
