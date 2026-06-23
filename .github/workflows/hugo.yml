@@ -80,6 +80,7 @@ jobs:
         run: |
           hugo build \
             --gc \
+            --cleanDestinationDir \
             --minify \
             --baseURL "${{ steps.pages.outputs.base_url }}/" \
             --cacheDir "${{ runner.temp }}/hugo_cache"
