@@ -17,7 +17,9 @@ The single **Local LLM / Platform Operations** dashboard covers request volume a
 
 Dashboard overview:
 
-`<INSERT_SCREENSHOT_HERE>`
+![Token usage, prompt cache efficiency, and inference throughput in Grafana](/blog/images/observable-local-llm-minikube/tokens-and-throughput.png)
+
+![Request admission, context usage, CPU, memory, throttling, and restarts in Grafana](/blog/images/observable-local-llm-minikube/capacity-and-resources.png)
 
 ## Where the metrics actually come from
 
@@ -38,11 +40,11 @@ For example, a slow request can have a high gateway latency while the model’s 
 
 Metrics and capacity panels:
 
-`<INSERT_SCREENSHOT_HERE>`
+![Scrape health, accepted telemetry, trace delivery, exporter queue, and Tempo spans in Grafana](/blog/images/observable-local-llm-minikube/telemetry-pipeline.png)
 
 A request trace in Tempo:
 
-`<INSERT_SCREENSHOT_HERE>`
+![Tempo request trace showing inference duration, token usage, prompt, and model response](/blog/images/observable-local-llm-minikube/tempo-request-trace.png)
 
 This setup measures system behavior. It does not evaluate answer correctness, report live KV-cache occupancy, or invent cloud billing costs for a local CPU model. The small model is useful for exercising the complete pipeline; it is not a benchmark of production model quality.
 
