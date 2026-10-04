@@ -29,7 +29,9 @@
 </span></span><span style=display:flex><span>    aarch64|arm64<span style=color:#ff79c6>)</span> <span style=color:#8be9fd;font-style:italic>HELM_ARCH</span><span style=color:#ff79c6>=</span>arm64 ;;
 </span></span><span style=display:flex><span>    *<span style=color:#ff79c6>)</span> <span style=color:#8be9fd;font-style:italic>echo</span> <span style=color:#f1fa8c>&#34;Unsupported Helm host architecture: </span><span style=color:#8be9fd;font-style:italic>$HELM_ARCH</span><span style=color:#f1fa8c>&#34;</span>; <span style=color:#8be9fd;font-style:italic>exit</span> <span style=color:#bd93f9>1</span> ;;
 </span></span><span style=display:flex><span>  <span style=color:#ff79c6>esac</span>
-</span></span><span style=display:flex><span>  curl -fsSL <span style=color:#f1fa8c>&#34;https://get.helm.sh/helm-v3.19.0-</span><span style=color:#f1fa8c>${</span><span style=color:#8be9fd;font-style:italic>HELM_OS</span><span style=color:#f1fa8c>}</span><span style=color:#f1fa8c>-</span><span style=color:#f1fa8c>${</span><span style=color:#8be9fd;font-style:italic>HELM_ARCH</span><span style=color:#f1fa8c>}</span><span style=color:#f1fa8c>.tar.gz&#34;</span> -o tools/helm.tar.gz
+</span></span><span style=display:flex><span>  curl -fsSL <span style=color:#f1fa8c>\
+</span></span></span><span style=display:flex><span>    <span style=color:#f1fa8c>&#34;https://get.helm.sh/helm-v3.19.0-</span><span style=color:#f1fa8c>${</span><span style=color:#8be9fd;font-style:italic>HELM_OS</span><span style=color:#f1fa8c>}</span><span style=color:#f1fa8c>-</span><span style=color:#f1fa8c>${</span><span style=color:#8be9fd;font-style:italic>HELM_ARCH</span><span style=color:#f1fa8c>}</span><span style=color:#f1fa8c>.tar.gz&#34;</span> <span style=color:#f1fa8c>\
+</span></span></span><span style=display:flex><span>    -o tools/helm.tar.gz
 </span></span><span style=display:flex><span>  tar -xzf tools/helm.tar.gz -C tools
 </span></span><span style=display:flex><span>  <span style=color:#8be9fd;font-style:italic>HELM</span><span style=color:#ff79c6>=</span><span style=color:#f1fa8c>&#34;</span><span style=color:#8be9fd;font-style:italic>$PWD</span><span style=color:#f1fa8c>/tools/</span><span style=color:#f1fa8c>${</span><span style=color:#8be9fd;font-style:italic>HELM_OS</span><span style=color:#f1fa8c>}</span><span style=color:#f1fa8c>-</span><span style=color:#f1fa8c>${</span><span style=color:#8be9fd;font-style:italic>HELM_ARCH</span><span style=color:#f1fa8c>}</span><span style=color:#f1fa8c>/helm&#34;</span>
 </span></span><span style=display:flex><span><span style=color:#ff79c6>fi</span>
@@ -99,7 +101,9 @@
 </span></span><span style=display:flex><span>
 </span></span><span style=display:flex><span><span style=color:#6272a4># The operator creates the Deployment asynchronously.</span>
 </span></span><span style=display:flex><span><span style=color:#ff79c6>for</span> attempt in <span style=color:#ff79c6>{</span>1..120<span style=color:#ff79c6>}</span>; <span style=color:#ff79c6>do</span>
-</span></span><span style=display:flex><span>  <span style=color:#ff79c6>if</span> k -n grafana get deployment grafana-deployment &gt;/dev/null 2&gt;&amp;1; <span style=color:#ff79c6>then</span> break; <span style=color:#ff79c6>fi</span>
+</span></span><span style=display:flex><span>  <span style=color:#ff79c6>if</span> k -n grafana get deployment grafana-deployment &gt;/dev/null 2&gt;&amp;1; <span style=color:#ff79c6>then</span>
+</span></span><span style=display:flex><span>    <span style=color:#8be9fd;font-style:italic>break</span>
+</span></span><span style=display:flex><span>  <span style=color:#ff79c6>fi</span>
 </span></span><span style=display:flex><span>  sleep <span style=color:#bd93f9>2</span>
 </span></span><span style=display:flex><span><span style=color:#ff79c6>done</span>
 </span></span><span style=display:flex><span>k -n grafana rollout status deployment/grafana-deployment --timeout<span style=color:#ff79c6>=</span>300s
@@ -709,7 +713,10 @@
 </span></span><span style=display:flex><span>meta <span style=color:#ff79c6>=</span> <span style=color:#ff79c6>lambda</span> name: {<span style=color:#f1fa8c>&#34;name&#34;</span>: name, <span style=color:#f1fa8c>&#34;namespace&#34;</span>: ns}
 </span></span><span style=display:flex><span>model_digest <span style=color:#ff79c6>=</span> <span style=color:#f1fa8c>&#34;8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684&#34;</span>
 </span></span><span style=display:flex><span><span style=color:#6272a4># Official llama.cpp CPU-only amd64 image, pinned from the registry on 2026-10-04.</span>
-</span></span><span style=display:flex><span>image <span style=color:#ff79c6>=</span> <span style=color:#f1fa8c>&#34;ghcr.io/ggml-org/llama.cpp@sha256:1cdfea0828170c34d56a8a6d9fc5a0898e8bca3762e5ec6be0c01032f7f7bde8&#34;</span>
+</span></span><span style=display:flex><span>image <span style=color:#ff79c6>=</span> (
+</span></span><span style=display:flex><span>    <span style=color:#f1fa8c>&#34;ghcr.io/ggml-org/llama.cpp@sha256:&#34;</span>
+</span></span><span style=display:flex><span>    <span style=color:#f1fa8c>&#34;1cdfea0828170c34d56a8a6d9fc5a0898e8bca3762e5ec6be0c01032f7f7bde8&#34;</span>
+</span></span><span style=display:flex><span>)
 </span></span><span style=display:flex><span>items <span style=color:#ff79c6>=</span> [
 </span></span><span style=display:flex><span>    {
 </span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;apiVersion&#34;</span>: <span style=color:#f1fa8c>&#34;v1&#34;</span>,
@@ -722,8 +729,13 @@
 </span></span><span style=display:flex><span>    }
 </span></span><span style=display:flex><span>]
 </span></span><span style=display:flex><span>download <span style=color:#ff79c6>=</span> <span style=color:#f1fa8c>f</span><span style=color:#f1fa8c>&#34;&#34;&#34;set -eu
-</span></span></span><span style=display:flex><span><span style=color:#f1fa8c>if [ -f /models/smollm2.gguf ] &amp;&amp; echo &#39;</span><span style=color:#f1fa8c>{</span>model_digest<span style=color:#f1fa8c>}</span><span style=color:#f1fa8c>  /models/smollm2.gguf&#39; | sha256sum -c -; then exit 0; fi
-</span></span></span><span style=display:flex><span><span style=color:#f1fa8c>curl --fail --location --retry 3 https://registry.ollama.ai/v2/library/smollm2/blobs/sha256:</span><span style=color:#f1fa8c>{</span>model_digest<span style=color:#f1fa8c>}</span><span style=color:#f1fa8c> -o /models/smollm2.gguf.part
+</span></span></span><span style=display:flex><span><span style=color:#f1fa8c>if [ -f /models/smollm2.gguf ] &amp;&amp; </span><span style=color:#f1fa8c>\\</span><span style=color:#f1fa8c>
+</span></span></span><span style=display:flex><span><span style=color:#f1fa8c>  echo &#39;</span><span style=color:#f1fa8c>{</span>model_digest<span style=color:#f1fa8c>}</span><span style=color:#f1fa8c>  /models/smollm2.gguf&#39; | sha256sum -c -; then
+</span></span></span><span style=display:flex><span><span style=color:#f1fa8c>  exit 0
+</span></span></span><span style=display:flex><span><span style=color:#f1fa8c>fi
+</span></span></span><span style=display:flex><span><span style=color:#f1fa8c>curl --fail --location --retry 3 </span><span style=color:#f1fa8c>\\</span><span style=color:#f1fa8c>
+</span></span></span><span style=display:flex><span><span style=color:#f1fa8c>  https://registry.ollama.ai/v2/library/smollm2/blobs/sha256:</span><span style=color:#f1fa8c>{</span>model_digest<span style=color:#f1fa8c>}</span><span style=color:#f1fa8c> </span><span style=color:#f1fa8c>\\</span><span style=color:#f1fa8c>
+</span></span></span><span style=display:flex><span><span style=color:#f1fa8c>  -o /models/smollm2.gguf.part
 </span></span></span><span style=display:flex><span><span style=color:#f1fa8c>echo &#39;</span><span style=color:#f1fa8c>{</span>model_digest<span style=color:#f1fa8c>}</span><span style=color:#f1fa8c>  /models/smollm2.gguf.part&#39; | sha256sum -c -
 </span></span></span><span style=display:flex><span><span style=color:#f1fa8c>mv /models/smollm2.gguf.part /models/smollm2.gguf
 </span></span></span><span style=display:flex><span><span style=color:#f1fa8c>&#34;&#34;&#34;</span>
@@ -731,28 +743,17 @@
 </span></span><span style=display:flex><span>    <span style=color:#f1fa8c>&#34;name&#34;</span>: <span style=color:#f1fa8c>&#34;model&#34;</span>,
 </span></span><span style=display:flex><span>    <span style=color:#f1fa8c>&#34;image&#34;</span>: image,
 </span></span><span style=display:flex><span>    <span style=color:#f1fa8c>&#34;args&#34;</span>: [
-</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;--model&#34;</span>,
-</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;/models/smollm2.gguf&#34;</span>,
-</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;--alias&#34;</span>,
-</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;smollm2:135m-instruct-q4_K_M&#34;</span>,
-</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;--host&#34;</span>,
-</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;0.0.0.0&#34;</span>,
-</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;--port&#34;</span>,
-</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;8080&#34;</span>,
-</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;--ctx-size&#34;</span>,
-</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;512&#34;</span>,
-</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;--parallel&#34;</span>,
-</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;1&#34;</span>,
-</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;--threads&#34;</span>,
-</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;2&#34;</span>,
-</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;--threads-batch&#34;</span>,
-</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;2&#34;</span>,
-</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;--n-gpu-layers&#34;</span>,
-</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;0&#34;</span>,
-</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;--batch-size&#34;</span>,
-</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;64&#34;</span>,
-</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;--ubatch-size&#34;</span>,
-</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;64&#34;</span>,
+</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;--model&#34;</span>, <span style=color:#f1fa8c>&#34;/models/smollm2.gguf&#34;</span>,
+</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;--alias&#34;</span>, <span style=color:#f1fa8c>&#34;smollm2:135m-instruct-q4_K_M&#34;</span>,
+</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;--host&#34;</span>, <span style=color:#f1fa8c>&#34;0.0.0.0&#34;</span>,
+</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;--port&#34;</span>, <span style=color:#f1fa8c>&#34;8080&#34;</span>,
+</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;--ctx-size&#34;</span>, <span style=color:#f1fa8c>&#34;512&#34;</span>,
+</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;--parallel&#34;</span>, <span style=color:#f1fa8c>&#34;1&#34;</span>,
+</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;--threads&#34;</span>, <span style=color:#f1fa8c>&#34;2&#34;</span>,
+</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;--threads-batch&#34;</span>, <span style=color:#f1fa8c>&#34;2&#34;</span>,
+</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;--n-gpu-layers&#34;</span>, <span style=color:#f1fa8c>&#34;0&#34;</span>,
+</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;--batch-size&#34;</span>, <span style=color:#f1fa8c>&#34;64&#34;</span>,
+</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;--ubatch-size&#34;</span>, <span style=color:#f1fa8c>&#34;64&#34;</span>,
 </span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;--metrics&#34;</span>,
 </span></span><span style=display:flex><span>    ],
 </span></span><span style=display:flex><span>    <span style=color:#f1fa8c>&#34;ports&#34;</span>: [{<span style=color:#f1fa8c>&#34;name&#34;</span>: <span style=color:#f1fa8c>&#34;http&#34;</span>, <span style=color:#f1fa8c>&#34;containerPort&#34;</span>: <span style=color:#bd93f9>8080</span>}],
@@ -873,7 +874,8 @@
 </span></span><span style=display:flex><span>k apply -f deployment.json
 </span></span><span style=display:flex><span>k -n ai-observability rollout status deployment/smollm-model --timeout<span style=color:#ff79c6>=</span>300s
 </span></span><span style=display:flex><span>k -n ai-observability rollout status deployment/smollm-client --timeout<span style=color:#ff79c6>=</span>180s
-</span></span></code></pre></div><p>Check the injected init image and bootstrap log:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span>k -n ai-observability get pod -l <span style=color:#8be9fd;font-style:italic>app</span><span style=color:#ff79c6>=</span>smollm-client   -o <span style=color:#8be9fd;font-style:italic>jsonpath</span><span style=color:#ff79c6>=</span><span style=color:#f1fa8c>&#39;{.items[0].spec.initContainers[0].image}&#39;</span>
+</span></span></code></pre></div><p>Check the injected init image and bootstrap log:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span>k -n ai-observability get pod -l <span style=color:#8be9fd;font-style:italic>app</span><span style=color:#ff79c6>=</span>smollm-client <span style=color:#f1fa8c>\
+</span></span></span><span style=display:flex><span>  -o <span style=color:#8be9fd;font-style:italic>jsonpath</span><span style=color:#ff79c6>=</span><span style=color:#f1fa8c>&#39;{.items[0].spec.initContainers[0].image}&#39;</span>
 </span></span><span style=display:flex><span>k -n ai-observability logs deployment/smollm-client --tail<span style=color:#ff79c6>=</span><span style=color:#bd93f9>20</span>
 </span></span><span style=display:flex><span>k -n ai-observability logs deployment/smollm-model -c download-model --tail<span style=color:#ff79c6>=</span><span style=color:#bd93f9>10</span>
 </span></span></code></pre></div><p>Expected: injection image 0.0.2, <code>OpenLIT auto-instrumentation initialized</code>, and a passing model checksum. <code>OTEL_METRIC_EXPORT_INTERVAL=15000</code> and <code>OPENLIT_DISABLE_EVENTS=true</code> are set directly on the gateway container; that avoids relying on a newer CR custom-env field which the installed operator image did not apply.</p><h2 id=7-connect-grafana-to-both-backends>7. Connect Grafana to both backends</h2><p>These resources must live in the Grafana Operator&rsquo;s watched namespace.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span>k apply -f - <span style=color:#f1fa8c>&lt;&lt;&#39;JSON&#39;
@@ -1055,11 +1057,17 @@
 </span></span><span style=display:flex><span>        <span style=color:#ff79c6>if</span> rate
 </span></span><span style=display:flex><span>        <span style=color:#ff79c6>else</span> <span style=color:#f1fa8c>f</span><span style=color:#f1fa8c>&#34;</span><span style=color:#f1fa8c>{</span>base<span style=color:#f1fa8c>}</span><span style=color:#f1fa8c>{{</span><span style=color:#f1fa8c>{</span>pod<span style=color:#f1fa8c>}</span><span style=color:#f1fa8c>,</span><span style=color:#f1fa8c>{</span>selector<span style=color:#f1fa8c>}</span><span style=color:#f1fa8c>}}</span><span style=color:#f1fa8c>&#34;</span>
 </span></span><span style=display:flex><span>    )
-</span></span><span style=display:flex><span>    <span style=color:#ff79c6>return</span> <span style=color:#f1fa8c>f</span><span style=color:#f1fa8c>&#39;(sum by(pod) (</span><span style=color:#f1fa8c>{</span>value(<span style=color:#f1fa8c>&#34;container=</span><span style=color:#f1fa8c>\&#34;\&#34;</span><span style=color:#f1fa8c>&#34;</span>)<span style=color:#f1fa8c>}</span><span style=color:#f1fa8c>) or sum by(pod) (</span><span style=color:#f1fa8c>{</span>value(<span style=color:#f1fa8c>&#34;container!=</span><span style=color:#f1fa8c>\&#34;\&#34;</span><span style=color:#f1fa8c>,container!=</span><span style=color:#f1fa8c>\&#34;</span><span style=color:#f1fa8c>POD</span><span style=color:#f1fa8c>\&#34;</span><span style=color:#f1fa8c>&#34;</span>)<span style=color:#f1fa8c>}</span><span style=color:#f1fa8c>))&#39;</span>
+</span></span><span style=display:flex><span>    <span style=color:#ff79c6>return</span> (
+</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>f</span><span style=color:#f1fa8c>&#39;(sum by(pod) (</span><span style=color:#f1fa8c>{</span>value(<span style=color:#f1fa8c>&#34;container=</span><span style=color:#f1fa8c>\&#34;\&#34;</span><span style=color:#f1fa8c>&#34;</span>)<span style=color:#f1fa8c>}</span><span style=color:#f1fa8c>) &#39;</span>
+</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>f</span><span style=color:#f1fa8c>&#39;or sum by(pod) (</span><span style=color:#f1fa8c>{</span>value(<span style=color:#f1fa8c>&#34;container!=</span><span style=color:#f1fa8c>\&#34;\&#34;</span><span style=color:#f1fa8c>,container!=</span><span style=color:#f1fa8c>\&#34;</span><span style=color:#f1fa8c>POD</span><span style=color:#f1fa8c>\&#34;</span><span style=color:#f1fa8c>&#34;</span>)<span style=color:#f1fa8c>}</span><span style=color:#f1fa8c>))&#39;</span>
+</span></span><span style=display:flex><span>    )
 </span></span><span style=display:flex><span>
 </span></span><span style=display:flex><span>
 </span></span><span style=display:flex><span><span style=color:#ff79c6>def</span> <span style=color:#50fa7b>limits</span>(metric):
-</span></span><span style=display:flex><span>    <span style=color:#ff79c6>return</span> <span style=color:#f1fa8c>f</span><span style=color:#f1fa8c>&#39;label_replace(sum by(k8s_pod_name) (</span><span style=color:#f1fa8c>{</span>metric<span style=color:#f1fa8c>}</span><span style=color:#f1fa8c>{{</span><span style=color:#f1fa8c>{</span>k8s<span style=color:#f1fa8c>}</span><span style=color:#f1fa8c>}}</span><span style=color:#f1fa8c>), &#34;pod&#34;, &#34;$1&#34;, &#34;k8s_pod_name&#34;, &#34;(.*)&#34;)&#39;</span>
+</span></span><span style=display:flex><span>    <span style=color:#ff79c6>return</span> (
+</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>f</span><span style=color:#f1fa8c>&#39;label_replace(sum by(k8s_pod_name) (</span><span style=color:#f1fa8c>{</span>metric<span style=color:#f1fa8c>}</span><span style=color:#f1fa8c>{{</span><span style=color:#f1fa8c>{</span>k8s<span style=color:#f1fa8c>}</span><span style=color:#f1fa8c>}}</span><span style=color:#f1fa8c>), &#39;</span>
+</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#39;&#34;pod&#34;, &#34;$1&#34;, &#34;k8s_pod_name&#34;, &#34;(.*)&#34;)&#39;</span>
+</span></span><span style=display:flex><span>    )
 </span></span><span style=display:flex><span>
 </span></span><span style=display:flex><span>
 </span></span><span style=display:flex><span>row(<span style=color:#f1fa8c>&#34;Service health and traffic&#34;</span>)
@@ -1187,7 +1195,10 @@
 </span></span><span style=display:flex><span>    quantiles(<span style=color:#f1fa8c>&#34;local_llm_http_duration_seconds&#34;</span>, http),
 </span></span><span style=display:flex><span>    <span style=color:#f1fa8c>&#34;s&#34;</span>,
 </span></span><span style=display:flex><span>    x<span style=color:#ff79c6>=</span><span style=color:#bd93f9>0</span>,
-</span></span><span style=display:flex><span>    desc<span style=color:#ff79c6>=</span><span style=color:#f1fa8c>&#34;Histogram estimates over the rate window. Low request volume limits percentile precision.&#34;</span>,
+</span></span><span style=display:flex><span>    desc<span style=color:#ff79c6>=</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;Histogram estimates over the rate window. Low request volume limits &#34;</span>
+</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;percentile precision.&#34;</span>
+</span></span><span style=display:flex><span>    ),
 </span></span><span style=display:flex><span>)
 </span></span><span style=display:flex><span>panel(
 </span></span><span style=display:flex><span>    <span style=color:#f1fa8c>&#34;First model token: p50 / p95 / p99&#34;</span>,
@@ -1201,7 +1212,10 @@
 </span></span><span style=display:flex><span>    quantiles(<span style=color:#f1fa8c>&#34;gen_ai_client_operation_duration_seconds&#34;</span>, sdk),
 </span></span><span style=display:flex><span>    <span style=color:#f1fa8c>&#34;s&#34;</span>,
 </span></span><span style=display:flex><span>    x<span style=color:#ff79c6>=</span><span style=color:#bd93f9>0</span>,
-</span></span><span style=display:flex><span>    desc<span style=color:#ff79c6>=</span><span style=color:#f1fa8c>&#34;SDK streaming operation duration; compare with gateway latency for application overhead.&#34;</span>,
+</span></span><span style=display:flex><span>    desc<span style=color:#ff79c6>=</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;SDK streaming operation duration; compare with gateway latency for &#34;</span>
+</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;application overhead.&#34;</span>
+</span></span><span style=display:flex><span>    ),
 </span></span><span style=display:flex><span>)
 </span></span><span style=display:flex><span>panel(
 </span></span><span style=display:flex><span>    <span style=color:#f1fa8c>&#34;Illustrative fast-success SLI (≤1 s)&#34;</span>,
@@ -1268,7 +1282,8 @@
 </span></span><span style=display:flex><span>        (
 </span></span><span style=display:flex><span>            <span style=color:#f1fa8c>&#34;{{gen_ai_token_type}}&#34;</span>,
 </span></span><span style=display:flex><span>            (
-</span></span><span style=display:flex><span>                <span style=color:#f1fa8c>f</span><span style=color:#f1fa8c>&#34;sum by(gen_ai_token_type) (increase(gen_ai_client_token_usage_sum</span><span style=color:#f1fa8c>{{</span><span style=color:#f1fa8c>{</span>sdk<span style=color:#f1fa8c>}</span><span style=color:#f1fa8c>}}</span><span style=color:#f1fa8c>[$__range])&#34;</span>
+</span></span><span style=display:flex><span>                <span style=color:#f1fa8c>f</span><span style=color:#f1fa8c>&#34;sum by(gen_ai_token_type) (increase(&#34;</span>
+</span></span><span style=display:flex><span>                <span style=color:#f1fa8c>f</span><span style=color:#f1fa8c>&#34;gen_ai_client_token_usage_sum</span><span style=color:#f1fa8c>{{</span><span style=color:#f1fa8c>{</span>sdk<span style=color:#f1fa8c>}</span><span style=color:#f1fa8c>}}</span><span style=color:#f1fa8c>[$__range])&#34;</span>
 </span></span><span style=display:flex><span>                <span style=color:#f1fa8c>f</span><span style=color:#f1fa8c>&#34;)&#34;</span>
 </span></span><span style=display:flex><span>            ),
 </span></span><span style=display:flex><span>        )
@@ -1290,7 +1305,9 @@
 </span></span><span style=display:flex><span>        (
 </span></span><span style=display:flex><span>            kind,
 </span></span><span style=display:flex><span>            (
-</span></span><span style=display:flex><span>                <span style=color:#f1fa8c>f</span><span style=color:#f1fa8c>&#39;histogram_quantile(0.95,sum by(le) (rate(gen_ai_client_token_usage_bucket</span><span style=color:#f1fa8c>{{</span><span style=color:#f1fa8c>{</span>sdk<span style=color:#f1fa8c>}</span><span style=color:#f1fa8c>,gen_ai_token_type=&#34;</span><span style=color:#f1fa8c>{</span>kind<span style=color:#f1fa8c>}</span><span style=color:#f1fa8c>&#34;</span><span style=color:#f1fa8c>}}</span><span style=color:#f1fa8c>[</span><span style=color:#f1fa8c>{</span>r<span style=color:#f1fa8c>}</span><span style=color:#f1fa8c>])&#39;</span>
+</span></span><span style=display:flex><span>                <span style=color:#f1fa8c>f</span><span style=color:#f1fa8c>&#39;histogram_quantile(0.95,sum by(le) (rate(&#39;</span>
+</span></span><span style=display:flex><span>                <span style=color:#f1fa8c>f</span><span style=color:#f1fa8c>&#39;gen_ai_client_token_usage_bucket</span><span style=color:#f1fa8c>{{</span><span style=color:#f1fa8c>{</span>sdk<span style=color:#f1fa8c>}</span><span style=color:#f1fa8c>,&#39;</span>
+</span></span><span style=display:flex><span>                <span style=color:#f1fa8c>f</span><span style=color:#f1fa8c>&#39;gen_ai_token_type=&#34;</span><span style=color:#f1fa8c>{</span>kind<span style=color:#f1fa8c>}</span><span style=color:#f1fa8c>&#34;</span><span style=color:#f1fa8c>}}</span><span style=color:#f1fa8c>[</span><span style=color:#f1fa8c>{</span>r<span style=color:#f1fa8c>}</span><span style=color:#f1fa8c>])&#39;</span>
 </span></span><span style=display:flex><span>                <span style=color:#f1fa8c>f</span><span style=color:#f1fa8c>&#34;))&#34;</span>
 </span></span><span style=display:flex><span>            ),
 </span></span><span style=display:flex><span>        )
@@ -1353,7 +1370,10 @@
 </span></span><span style=display:flex><span>    ),
 </span></span><span style=display:flex><span>    <span style=color:#f1fa8c>&#34;s&#34;</span>,
 </span></span><span style=display:flex><span>    x<span style=color:#ff79c6>=</span><span style=color:#bd93f9>12</span>,
-</span></span><span style=display:flex><span>    desc<span style=color:#ff79c6>=</span><span style=color:#f1fa8c>&#34;Weighted server decode time / generated tokens, not a per-request latency percentile.&#34;</span>,
+</span></span><span style=display:flex><span>    desc<span style=color:#ff79c6>=</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;Weighted server decode time / generated tokens, not a per-request &#34;</span>
+</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;latency percentile.&#34;</span>
+</span></span><span style=display:flex><span>    ),
 </span></span><span style=display:flex><span>)
 </span></span><span style=display:flex><span>y <span style=color:#ff79c6>+=</span> <span style=color:#bd93f9>8</span>
 </span></span><span style=display:flex><span>
@@ -1416,7 +1436,10 @@
 </span></span><span style=display:flex><span>    ),
 </span></span><span style=display:flex><span>    <span style=color:#f1fa8c>&#34;percent&#34;</span>,
 </span></span><span style=display:flex><span>    x<span style=color:#ff79c6>=</span><span style=color:#bd93f9>0</span>,
-</span></span><span style=display:flex><span>    desc<span style=color:#ff79c6>=</span><span style=color:#f1fa8c>&#34;Throttled CFS periods / elapsed CFS periods by pod. An idle denominator yields no percentage.&#34;</span>,
+</span></span><span style=display:flex><span>    desc<span style=color:#ff79c6>=</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;Throttled CFS periods / elapsed CFS periods by pod. An idle denominator &#34;</span>
+</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;yields no percentage.&#34;</span>
+</span></span><span style=display:flex><span>    ),
 </span></span><span style=display:flex><span>)
 </span></span><span style=display:flex><span>panel(
 </span></span><span style=display:flex><span>    <span style=color:#f1fa8c>&#34;OOM events and container restarts&#34;</span>,
@@ -1456,7 +1479,10 @@
 </span></span><span style=display:flex><span>    x<span style=color:#ff79c6>=</span><span style=color:#bd93f9>12</span>,
 </span></span><span style=display:flex><span>    w<span style=color:#ff79c6>=</span><span style=color:#bd93f9>12</span>,
 </span></span><span style=display:flex><span>    h<span style=color:#ff79c6>=</span><span style=color:#bd93f9>8</span>,
-</span></span><span style=display:flex><span>    desc<span style=color:#ff79c6>=</span><span style=color:#f1fa8c>&#34;Kubernetes readiness from the existing Collector. Missing data is not treated as ready.&#34;</span>,
+</span></span><span style=display:flex><span>    desc<span style=color:#ff79c6>=</span>(
+</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;Kubernetes readiness from the existing Collector. Missing data is not &#34;</span>
+</span></span><span style=display:flex><span>        <span style=color:#f1fa8c>&#34;treated as ready.&#34;</span>
+</span></span><span style=display:flex><span>    ),
 </span></span><span style=display:flex><span>)
 </span></span><span style=display:flex><span>y <span style=color:#ff79c6>+=</span> <span style=color:#bd93f9>8</span>
 </span></span><span style=display:flex><span>
@@ -1466,7 +1492,10 @@
 </span></span><span style=display:flex><span>    [
 </span></span><span style=display:flex><span>        (
 </span></span><span style=display:flex><span>            <span style=color:#f1fa8c>&#34;{{job}}&#34;</span>,
-</span></span><span style=display:flex><span>            <span style=color:#f1fa8c>&#39;up{job=~&#34;smollm-model|smollm-client|openlit|collector-internal|kubelet-cadvisor|tempo&#34;}&#39;</span>,
+</span></span><span style=display:flex><span>            (
+</span></span><span style=display:flex><span>                <span style=color:#f1fa8c>&#39;up{job=~&#34;smollm-model|smollm-client|openlit|collector-internal&#39;</span>
+</span></span><span style=display:flex><span>                <span style=color:#f1fa8c>&#39;|kubelet-cadvisor|tempo&#34;}&#39;</span>
+</span></span><span style=display:flex><span>            ),
 </span></span><span style=display:flex><span>        )
 </span></span><span style=display:flex><span>    ],
 </span></span><span style=display:flex><span>    kind<span style=color:#ff79c6>=</span><span style=color:#f1fa8c>&#34;stat&#34;</span>,
@@ -1484,11 +1513,17 @@
 </span></span><span style=display:flex><span>    [
 </span></span><span style=display:flex><span>        (
 </span></span><span style=display:flex><span>            <span style=color:#f1fa8c>&#34;spans / s&#34;</span>,
-</span></span><span style=display:flex><span>            <span style=color:#f1fa8c>&#39;sum(rate(otelcol_receiver_accepted_spans{receiver=&#34;otlp&#34;}[$__rate_interval]))&#39;</span>,
+</span></span><span style=display:flex><span>            (
+</span></span><span style=display:flex><span>                <span style=color:#f1fa8c>&#39;sum(rate(otelcol_receiver_accepted_spans{&#39;</span>
+</span></span><span style=display:flex><span>                <span style=color:#f1fa8c>&#39;receiver=&#34;otlp&#34;}[$__rate_interval]))&#39;</span>
+</span></span><span style=display:flex><span>            ),
 </span></span><span style=display:flex><span>        ),
 </span></span><span style=display:flex><span>        (
 </span></span><span style=display:flex><span>            <span style=color:#f1fa8c>&#34;metric points / s&#34;</span>,
-</span></span><span style=display:flex><span>            <span style=color:#f1fa8c>&#39;sum(rate(otelcol_receiver_accepted_metric_points{receiver=&#34;otlp&#34;}[$__rate_interval]))&#39;</span>,
+</span></span><span style=display:flex><span>            (
+</span></span><span style=display:flex><span>                <span style=color:#f1fa8c>&#39;sum(rate(otelcol_receiver_accepted_metric_points{&#39;</span>
+</span></span><span style=display:flex><span>                <span style=color:#f1fa8c>&#39;receiver=&#34;otlp&#34;}[$__rate_interval]))&#39;</span>
+</span></span><span style=display:flex><span>            ),
 </span></span><span style=display:flex><span>        ),
 </span></span><span style=display:flex><span>    ],
 </span></span><span style=display:flex><span>    x<span style=color:#ff79c6>=</span><span style=color:#bd93f9>0</span>,
@@ -1498,15 +1533,24 @@
 </span></span><span style=display:flex><span>    [
 </span></span><span style=display:flex><span>        (
 </span></span><span style=display:flex><span>            <span style=color:#f1fa8c>&#34;refused spans / s&#34;</span>,
-</span></span><span style=display:flex><span>            <span style=color:#f1fa8c>&#39;sum(rate(otelcol_receiver_refused_spans{receiver=&#34;otlp&#34;}[$__rate_interval]))&#39;</span>,
+</span></span><span style=display:flex><span>            (
+</span></span><span style=display:flex><span>                <span style=color:#f1fa8c>&#39;sum(rate(otelcol_receiver_refused_spans{&#39;</span>
+</span></span><span style=display:flex><span>                <span style=color:#f1fa8c>&#39;receiver=&#34;otlp&#34;}[$__rate_interval]))&#39;</span>
+</span></span><span style=display:flex><span>            ),
 </span></span><span style=display:flex><span>        ),
 </span></span><span style=display:flex><span>        (
 </span></span><span style=display:flex><span>            <span style=color:#f1fa8c>&#34;failed sends / s&#34;</span>,
-</span></span><span style=display:flex><span>            <span style=color:#f1fa8c>&#39;sum(rate(otelcol_exporter_send_failed_spans{exporter=&#34;otlp/tempo&#34;}[$__rate_interval]))&#39;</span>,
+</span></span><span style=display:flex><span>            (
+</span></span><span style=display:flex><span>                <span style=color:#f1fa8c>&#39;sum(rate(otelcol_exporter_send_failed_spans{&#39;</span>
+</span></span><span style=display:flex><span>                <span style=color:#f1fa8c>&#39;exporter=&#34;otlp/tempo&#34;}[$__rate_interval]))&#39;</span>
+</span></span><span style=display:flex><span>            ),
 </span></span><span style=display:flex><span>        ),
 </span></span><span style=display:flex><span>        (
 </span></span><span style=display:flex><span>            <span style=color:#f1fa8c>&#34;enqueue failures / s&#34;</span>,
-</span></span><span style=display:flex><span>            <span style=color:#f1fa8c>&#39;sum(rate(otelcol_exporter_enqueue_failed_spans{exporter=&#34;otlp/tempo&#34;}[$__rate_interval]))&#39;</span>,
+</span></span><span style=display:flex><span>            (
+</span></span><span style=display:flex><span>                <span style=color:#f1fa8c>&#39;sum(rate(otelcol_exporter_enqueue_failed_spans{&#39;</span>
+</span></span><span style=display:flex><span>                <span style=color:#f1fa8c>&#39;exporter=&#34;otlp/tempo&#34;}[$__rate_interval]))&#39;</span>
+</span></span><span style=display:flex><span>            ),
 </span></span><span style=display:flex><span>        ),
 </span></span><span style=display:flex><span>    ],
 </span></span><span style=display:flex><span>    x<span style=color:#ff79c6>=</span><span style=color:#bd93f9>12</span>,
@@ -1605,9 +1649,11 @@
 </span></span><span style=display:flex><span>k apply -f dashboard.json
 </span></span></code></pre></div><h2 id=9-access-grafana-and-the-gateway>9. Access Grafana and the gateway</h2><p>In a separate terminal, set the same profile name and leave this running:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span><span style=color:#8be9fd;font-style:italic>export</span> <span style=color:#8be9fd;font-style:italic>CLUSTER</span><span style=color:#ff79c6>=</span><span style=color:#f1fa8c>&#34;llm-lab&#34;</span>  <span style=color:#6272a4># use the profile name chosen in step 1</span>
 </span></span><span style=display:flex><span>kubectl --context <span style=color:#f1fa8c>&#34;</span><span style=color:#8be9fd;font-style:italic>$CLUSTER</span><span style=color:#f1fa8c>&#34;</span> -n grafana port-forward svc/grafana-service 3000:3000
-</span></span></code></pre></div><p>Open <strong>http://localhost:3000/d/smollm-local</strong>. Username: <code>admin</code>. Retrieve the generated password:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span>kubectl --context <span style=color:#f1fa8c>&#34;</span><span style=color:#8be9fd;font-style:italic>$CLUSTER</span><span style=color:#f1fa8c>&#34;</span> -n grafana get secret grafana-admin   -o <span style=color:#8be9fd;font-style:italic>jsonpath</span><span style=color:#ff79c6>=</span><span style=color:#f1fa8c>&#39;{.data.GF_SECURITY_ADMIN_PASSWORD}&#39;</span> | base64 --decode
+</span></span></code></pre></div><p>Open <strong>http://localhost:3000/d/smollm-local</strong>. Username: <code>admin</code>. Retrieve the generated password:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span>kubectl --context <span style=color:#f1fa8c>&#34;</span><span style=color:#8be9fd;font-style:italic>$CLUSTER</span><span style=color:#f1fa8c>&#34;</span> -n grafana get secret grafana-admin <span style=color:#f1fa8c>\
+</span></span></span><span style=display:flex><span>  -o <span style=color:#8be9fd;font-style:italic>jsonpath</span><span style=color:#ff79c6>=</span><span style=color:#f1fa8c>&#39;{.data.GF_SECURITY_ADMIN_PASSWORD}&#39;</span> | base64 --decode
 </span></span></code></pre></div><p>In another terminal, leave the gateway forwarding running:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span><span style=color:#8be9fd;font-style:italic>export</span> <span style=color:#8be9fd;font-style:italic>CLUSTER</span><span style=color:#ff79c6>=</span><span style=color:#f1fa8c>&#34;llm-lab&#34;</span>  <span style=color:#6272a4># use the same profile name</span>
-</span></span><span style=display:flex><span>kubectl --context <span style=color:#f1fa8c>&#34;</span><span style=color:#8be9fd;font-style:italic>$CLUSTER</span><span style=color:#f1fa8c>&#34;</span> -n ai-observability port-forward svc/smollm-client 8080:8080
+</span></span><span style=display:flex><span>kubectl --context <span style=color:#f1fa8c>&#34;</span><span style=color:#8be9fd;font-style:italic>$CLUSTER</span><span style=color:#f1fa8c>&#34;</span> -n ai-observability <span style=color:#f1fa8c>\
+</span></span></span><span style=display:flex><span>  port-forward svc/smollm-client 8080:8080
 </span></span></code></pre></div><p>Send real requests from another terminal. No provider API key or account is needed.</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span>curl --fail --silent --show-error http://localhost:8080/chat <span style=color:#f1fa8c>\
 </span></span></span><span style=display:flex><span>  -H <span style=color:#f1fa8c>&#39;Content-Type: application/json&#39;</span> <span style=color:#f1fa8c>\
 </span></span></span><span style=display:flex><span>  -d <span style=color:#f1fa8c>&#39;{&#34;prompt&#34;:&#34;Say hello in three words.&#34;}&#39;</span> <span style=color:#f1fa8c>\
@@ -1620,7 +1666,8 @@
 </span></span></code></pre></div><p>The second request intentionally exercises the output limit with a real inference call: <code>finish_reason</code> should be <code>length</code>. The response includes actual token usage, <code>first_token_seconds</code>, and total processing duration. A very small model is sufficient to validate telemetry, even though response quality is limited.</p><p>Allow roughly 30 seconds for OpenLIT export and Prometheus scraping. At low traffic, rate/percentile estimates are sparse. No observations or zero request denominators yield no sample rather than a misleading success percentage. Counters use <code>increase</code>/<code>rate</code> before aggregation to handle restarts, but first samples without a preceding baseline may not contribute to range increases.</p><p>OpenLIT&rsquo;s provider label can read <code>openai</code> because the SDK is OpenAI-compatible. The model and network endpoint identify local inference; no OpenAI service is called. Direct requests to the model server bypass gateway/OpenLIT measurements, though native server metrics still count them.</p><h2 id=10-verify-the-entire-pipeline>10. Verify the entire pipeline</h2><h3 id=kubernetes-and-reconciliation>Kubernetes and reconciliation</h3><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span>kubectl --context <span style=color:#f1fa8c>&#34;</span><span style=color:#8be9fd;font-style:italic>$CLUSTER</span><span style=color:#f1fa8c>&#34;</span> -n ai-observability get deployments,pods,pvc
 </span></span><span style=display:flex><span>kubectl --context <span style=color:#f1fa8c>&#34;</span><span style=color:#8be9fd;font-style:italic>$CLUSTER</span><span style=color:#f1fa8c>&#34;</span> -n grafana get grafanadatasources,grafanadashboards
 </span></span><span style=display:flex><span>kubectl --context <span style=color:#f1fa8c>&#34;</span><span style=color:#8be9fd;font-style:italic>$CLUSTER</span><span style=color:#f1fa8c>&#34;</span> -n grafana get grafanadashboard smollm-local -o yaml
-</span></span></code></pre></div><p>Expected: all deployments ready, PVCs Bound, exactly one managed dashboard, and <code>DashboardSynchronized=True</code>.</p><h3 id=metrics>Metrics</h3><p>On the dashboard, check HTTP 200 traffic, input/output token counts, first-token latency, completion finish reasons, memory/CPU usage, and every scrape-health target. For independent Prometheus checks, forward it in another terminal:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span>kubectl --context <span style=color:#f1fa8c>&#34;</span><span style=color:#8be9fd;font-style:italic>$CLUSTER</span><span style=color:#f1fa8c>&#34;</span> -n ai-observability port-forward svc/prometheus 9090:9090
+</span></span></code></pre></div><p>Expected: all deployments ready, PVCs Bound, exactly one managed dashboard, and <code>DashboardSynchronized=True</code>.</p><h3 id=metrics>Metrics</h3><p>On the dashboard, check HTTP 200 traffic, input/output token counts, first-token latency, completion finish reasons, memory/CPU usage, and every scrape-health target. For independent Prometheus checks, forward it in another terminal:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span>kubectl --context <span style=color:#f1fa8c>&#34;</span><span style=color:#8be9fd;font-style:italic>$CLUSTER</span><span style=color:#f1fa8c>&#34;</span> -n ai-observability <span style=color:#f1fa8c>\
+</span></span></span><span style=display:flex><span>  port-forward svc/prometheus 9090:9090
 </span></span></code></pre></div><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span>curl -fsS -G http://localhost:9090/api/v1/query <span style=color:#f1fa8c>\
 </span></span></span><span style=display:flex><span>  --data-urlencode <span style=color:#f1fa8c>&#39;query=sum(gen_ai_client_token_usage_sum{service_name=&#34;smollm-client&#34;})&#39;</span> <span style=color:#f1fa8c>\
 </span></span></span><span style=display:flex><span>  | python3 -m json.tool
@@ -1633,9 +1680,13 @@
 </span></span></span><span style=display:flex><span>  --data-urlencode <span style=color:#f1fa8c>&#39;query=up{job=~&#34;smollm-client|smollm-model|openlit|collector-internal|kubelet-cadvisor|tempo&#34;}&#39;</span> <span style=color:#f1fa8c>\
 </span></span></span><span style=display:flex><span>  | python3 -m json.tool
 </span></span></code></pre></div><p>Each scrape-health target should be 1. Kubernetes metric identities vary between versions; the resource queries prefer the cAdvisor pod aggregate where it exists and fall back to container sums, avoiding double counting. Container limit/restart/readiness metrics come from the API through the Collector. Old pod series can linger briefly after a rollout until metric expiry.</p><h3 id=traces>Traces</h3><p>Use the dashboard&rsquo;s embedded trace table, or Explore → AI Tempo:</p><pre tabindex=0><code class=language-traceql data-lang=traceql>{ resource.service.name = &#34;smollm-client&#34; }
-</code></pre><p>Open a <code>chat smollm2:135m-instruct-q4_K_M</code> trace. Check duration, token attributes, and status. Metric collection alone is not proof of successful trace delivery: use the Collector queue/failure panels and Tempo ingest on the same dashboard.</p><h3 id=input-rejection-and-bounded-admission-behavior>Input rejection and bounded-admission behavior</h3><p>A malformed prompt should produce HTTP 400, which is counted separately from valid-request success:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span>curl -sS -o /dev/null -w <span style=color:#f1fa8c>&#39;HTTP %{http_code}
-</span></span></span><span style=display:flex><span><span style=color:#f1fa8c>&#39;</span> http://localhost:8080/chat   -H <span style=color:#f1fa8c>&#39;Content-Type: application/json&#39;</span> -d <span style=color:#f1fa8c>&#39;{&#34;prompt&#34;:&#34;&#34;}&#39;</span>
-</span></span></code></pre></div><p>Optionally issue a small finite burst of real requests to exercise rejection and queueing. This is a bounded verification, not continuous traffic generation:</p><p>Save the following as <code>verify-burst.py</code>:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none><code class=language-python data-lang=python><span style=display:flex><span><span style=color:#ff79c6>import</span> concurrent.futures<span style=color:#ff79c6>,</span> json<span style=color:#ff79c6>,</span> urllib.request<span style=color:#ff79c6>,</span> urllib.error
+</code></pre><p>Open a <code>chat smollm2:135m-instruct-q4_K_M</code> trace. Check duration, token attributes, and status. Metric collection alone is not proof of successful trace delivery: use the Collector queue/failure panels and Tempo ingest on the same dashboard.</p><h3 id=input-rejection-and-bounded-admission-behavior>Input rejection and bounded-admission behavior</h3><p>A malformed prompt should produce HTTP 400, which is counted separately from valid-request success:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span>curl -sS -o /dev/null -w <span style=color:#f1fa8c>&#39;HTTP %{http_code}\n&#39;</span> http://localhost:8080/chat <span style=color:#f1fa8c>\
+</span></span></span><span style=display:flex><span>  -H <span style=color:#f1fa8c>&#39;Content-Type: application/json&#39;</span> <span style=color:#f1fa8c>\
+</span></span></span><span style=display:flex><span>  -d <span style=color:#f1fa8c>&#39;{&#34;prompt&#34;:&#34;&#34;}&#39;</span>
+</span></span></code></pre></div><p>Optionally issue a small finite burst of real requests to exercise rejection and queueing. This is a bounded verification, not continuous traffic generation:</p><p>Save the following as <code>verify-burst.py</code>:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none><code class=language-python data-lang=python><span style=display:flex><span><span style=color:#ff79c6>import</span> concurrent.futures
+</span></span><span style=display:flex><span><span style=color:#ff79c6>import</span> json
+</span></span><span style=display:flex><span><span style=color:#ff79c6>import</span> urllib.error
+</span></span><span style=display:flex><span><span style=color:#ff79c6>import</span> urllib.request
 </span></span><span style=display:flex><span>
 </span></span><span style=display:flex><span>
 </span></span><span style=display:flex><span><span style=color:#ff79c6>def</span> <span style=color:#50fa7b>call</span>(_):
@@ -1659,15 +1710,20 @@
 </span></span><span style=display:flex><span>minikube start -p <span style=color:#f1fa8c>&#34;</span><span style=color:#8be9fd;font-style:italic>$CLUSTER</span><span style=color:#f1fa8c>&#34;</span>
 </span></span><span style=display:flex><span>kubectl --context <span style=color:#f1fa8c>&#34;</span><span style=color:#8be9fd;font-style:italic>$CLUSTER</span><span style=color:#f1fa8c>&#34;</span> -n ai-observability get pods,pvc
 </span></span><span style=display:flex><span>kubectl --context <span style=color:#f1fa8c>&#34;</span><span style=color:#8be9fd;font-style:italic>$CLUSTER</span><span style=color:#f1fa8c>&#34;</span> -n grafana get pods,pvc
-</span></span></code></pre></div><p>Restart port forwards, then make another request. No reinstall or rebuild is necessary for a normal stop/start. The profile retains Kubernetes resources, Secrets, model weights, and the locally built client image. Process counters restart, while historical metrics/traces remain within retention. Deleting the profile deletes that state; repeating this guide recreates the setup, not the deleted data.</p><p>For application changes, edit the source created in step 6, rebuild the client image, rerun the deployment generator from that step, and apply its output. The source hash rolls out the new pod. For backend configuration changes, rerun step 4; config hashes roll out the affected backend. For dashboard changes, change the generator in step 8 and reapply its output.</p><p>Scale inference down when unused, retaining the model PVC:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span>kubectl --context <span style=color:#f1fa8c>&#34;</span><span style=color:#8be9fd;font-style:italic>$CLUSTER</span><span style=color:#f1fa8c>&#34;</span> -n ai-observability scale   deployment/smollm-model deployment/smollm-client --replicas<span style=color:#ff79c6>=</span><span style=color:#bd93f9>0</span>
+</span></span></code></pre></div><p>Restart port forwards, then make another request. No reinstall or rebuild is necessary for a normal stop/start. The profile retains Kubernetes resources, Secrets, model weights, and the locally built client image. Process counters restart, while historical metrics/traces remain within retention. Deleting the profile deletes that state; repeating this guide recreates the setup, not the deleted data.</p><p>For application changes, edit the source created in step 6, rebuild the client image, rerun the deployment generator from that step, and apply its output. The source hash rolls out the new pod. For backend configuration changes, rerun step 4; config hashes roll out the affected backend. For dashboard changes, change the generator in step 8 and reapply its output.</p><p>Scale inference down when unused, retaining the model PVC:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span>kubectl --context <span style=color:#f1fa8c>&#34;</span><span style=color:#8be9fd;font-style:italic>$CLUSTER</span><span style=color:#f1fa8c>&#34;</span> -n ai-observability scale <span style=color:#f1fa8c>\
+</span></span></span><span style=display:flex><span>  deployment/smollm-model deployment/smollm-client --replicas<span style=color:#ff79c6>=</span><span style=color:#bd93f9>0</span>
 </span></span><span style=display:flex><span>
 </span></span><span style=display:flex><span><span style=color:#6272a4># Resume:</span>
-</span></span><span style=display:flex><span>kubectl --context <span style=color:#f1fa8c>&#34;</span><span style=color:#8be9fd;font-style:italic>$CLUSTER</span><span style=color:#f1fa8c>&#34;</span> -n ai-observability scale   deployment/smollm-model deployment/smollm-client --replicas<span style=color:#ff79c6>=</span><span style=color:#bd93f9>1</span>
+</span></span><span style=display:flex><span>kubectl --context <span style=color:#f1fa8c>&#34;</span><span style=color:#8be9fd;font-style:italic>$CLUSTER</span><span style=color:#f1fa8c>&#34;</span> -n ai-observability scale <span style=color:#f1fa8c>\
+</span></span></span><span style=display:flex><span>  deployment/smollm-model deployment/smollm-client --replicas<span style=color:#ff79c6>=</span><span style=color:#bd93f9>1</span>
 </span></span></code></pre></div><h2 id=12-operational-response-guide>12. Operational response guide</h2><table><thead><tr><th>Symptom</th><th>Investigation / response</th></tr></thead><tbody><tr><td>Model/client scrape down</td><td>Inspect deployment availability, readiness, pod events; restart port forwards after a pod replacement</td></tr><tr><td>TTFT rising, decode steady</td><td>Check server deferred requests, gateway admission, prefill throughput and cache hit fraction; distinguish queue pressure from prompt work</td></tr><tr><td>Decode throughput drops</td><td>Check CPU usage versus limits and CFS throttling; compare token lengths before increasing resources</td></tr><tr><td>HTTP 429 rising</td><td>Admission is full; reduce caller concurrency or intentionally change capacity/slots after checking CPU and memory headroom</td></tr><tr><td>HTTP 400 / 413 rising</td><td>Check prompt/body limits and 512-token context; these are validation failures, not server availability failures</td></tr><tr><td>Output capped at max_tokens</td><td>Check <code>length</code> finish fraction and output-token distribution; the lab permits 1–64 generated tokens</td></tr><tr><td>Memory near limit / OOM / restarts</td><td>Inspect pod termination reasons; correlate context/concurrency with working memory before increasing the limit</td></tr><tr><td>Missing metrics while inference succeeds</td><td>Check gateway scrape, <code>openlit</code> scrape, injection bootstrap, collector OTLP accepted metrics, and kubelet RBAC errors</td></tr><tr><td>Missing traces while metrics exist</td><td>Check refused spans, exporter enqueue/send failures, queue/capacity, and Tempo scrape/ingest; inspect Collector/Tempo logs</td></tr><tr><td>First installation stuck</td><td>Inspect model download checksum/network access, ServiceAccount/RBAC creation, and PVC binding</td></tr></tbody></table><p>Useful commands:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#282a36;-moz-tab-size:2;-o-tab-size:2;tab-size:2;-webkit-text-size-adjust:none><code class=language-bash data-lang=bash><span style=display:flex><span>kubectl --context <span style=color:#f1fa8c>&#34;</span><span style=color:#8be9fd;font-style:italic>$CLUSTER</span><span style=color:#f1fa8c>&#34;</span> -n ai-observability get events --sort-by<span style=color:#ff79c6>=</span>.lastTimestamp
 </span></span><span style=display:flex><span>kubectl --context <span style=color:#f1fa8c>&#34;</span><span style=color:#8be9fd;font-style:italic>$CLUSTER</span><span style=color:#f1fa8c>&#34;</span> -n ai-observability describe pod -l <span style=color:#8be9fd;font-style:italic>app</span><span style=color:#ff79c6>=</span>smollm-client
-</span></span><span style=display:flex><span>kubectl --context <span style=color:#f1fa8c>&#34;</span><span style=color:#8be9fd;font-style:italic>$CLUSTER</span><span style=color:#f1fa8c>&#34;</span> -n ai-observability logs deployment/smollm-client --tail<span style=color:#ff79c6>=</span><span style=color:#bd93f9>50</span>
-</span></span><span style=display:flex><span>kubectl --context <span style=color:#f1fa8c>&#34;</span><span style=color:#8be9fd;font-style:italic>$CLUSTER</span><span style=color:#f1fa8c>&#34;</span> -n ai-observability logs deployment/smollm-model -c download-model --tail<span style=color:#ff79c6>=</span><span style=color:#bd93f9>30</span>
-</span></span><span style=display:flex><span>kubectl --context <span style=color:#f1fa8c>&#34;</span><span style=color:#8be9fd;font-style:italic>$CLUSTER</span><span style=color:#f1fa8c>&#34;</span> -n ai-observability logs deployment/otel-collector --tail<span style=color:#ff79c6>=</span><span style=color:#bd93f9>50</span>
+</span></span><span style=display:flex><span>kubectl --context <span style=color:#f1fa8c>&#34;</span><span style=color:#8be9fd;font-style:italic>$CLUSTER</span><span style=color:#f1fa8c>&#34;</span> -n ai-observability <span style=color:#f1fa8c>\
+</span></span></span><span style=display:flex><span>  logs deployment/smollm-client --tail<span style=color:#ff79c6>=</span><span style=color:#bd93f9>50</span>
+</span></span><span style=display:flex><span>kubectl --context <span style=color:#f1fa8c>&#34;</span><span style=color:#8be9fd;font-style:italic>$CLUSTER</span><span style=color:#f1fa8c>&#34;</span> -n ai-observability <span style=color:#f1fa8c>\
+</span></span></span><span style=display:flex><span>  logs deployment/smollm-model -c download-model --tail<span style=color:#ff79c6>=</span><span style=color:#bd93f9>30</span>
+</span></span><span style=display:flex><span>kubectl --context <span style=color:#f1fa8c>&#34;</span><span style=color:#8be9fd;font-style:italic>$CLUSTER</span><span style=color:#f1fa8c>&#34;</span> -n ai-observability <span style=color:#f1fa8c>\
+</span></span></span><span style=display:flex><span>  logs deployment/otel-collector --tail<span style=color:#ff79c6>=</span><span style=color:#bd93f9>50</span>
 </span></span><span style=display:flex><span>kubectl --context <span style=color:#f1fa8c>&#34;</span><span style=color:#8be9fd;font-style:italic>$CLUSTER</span><span style=color:#f1fa8c>&#34;</span> -n ai-observability logs deployment/tempo --tail<span style=color:#ff79c6>=</span><span style=color:#bd93f9>50</span>
 </span></span></code></pre></div><p>The dashboard&rsquo;s percentiles depend on histogram bucket resolution and sample volume. Its ratios intentionally remain undefined at zero traffic. Restart gauges should not be treated as monotonic counters. Model context high-water mark is not live KV usage. Semantic correctness, evaluation scores, electricity costs, and true live KV-cache occupancy need additional measurement; they are not inferred from latency or tokens.</p><h2 id=references>References</h2><ul><li><a href=https://grafana.com/blog/ai-observability-zero-code/>Grafana zero-code AI observability architecture</a></li><li><a href=https://github.com/grafana/grafana-operator/releases/tag/v5.25.0>Grafana Operator release</a></li><li><a href=https://docs.openlit.io/latest/sdk/destinations/prometheus-tempo>OpenLIT telemetry to Prometheus and Tempo</a></li><li><a href=https://github.com/ggml-org/llama.cpp/blob/master/docs/docker.md>llama.cpp CPU container images</a></li><li><a href=https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md>llama.cpp server metrics and API</a></li><li><a href=https://opentelemetry.io/docs/collector/internal-telemetry/>Collector internal telemetry</a></li><li><a href=https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.161.0/receiver/k8sclusterreceiver>Collector Kubernetes cluster receiver</a></li></ul></div><footer class=post-footer><div class=post-nav></div><a href=https://adykaaa.github.io/blog/ class=back-link>← Back to all posts</a></footer></article></div></main><footer class=site-footer><div class=footer-inner><span class=footer-copy>© 2026 Adam Toth</span>
 <span class=footer-sep>·</span>

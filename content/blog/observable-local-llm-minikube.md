@@ -109,7 +109,9 @@ else
     aarch64|arm64) HELM_ARCH=arm64 ;;
     *) echo "Unsupported Helm host architecture: $HELM_ARCH"; exit 1 ;;
   esac
-  curl -fsSL "https://get.helm.sh/helm-v3.19.0-${HELM_OS}-${HELM_ARCH}.tar.gz" -o tools/helm.tar.gz
+  curl -fsSL \
+    "https://get.helm.sh/helm-v3.19.0-${HELM_OS}-${HELM_ARCH}.tar.gz" \
+    -o tools/helm.tar.gz
   tar -xzf tools/helm.tar.gz -C tools
   HELM="$PWD/tools/${HELM_OS}-${HELM_ARCH}/helm"
 fi
@@ -186,7 +188,9 @@ YAML
 
 # The operator creates the Deployment asynchronously.
 for attempt in {1..120}; do
-  if k -n grafana get deployment grafana-deployment >/dev/null 2>&1; then break; fi
+  if k -n grafana get deployment grafana-deployment >/dev/null 2>&1; then
+    break
+  fi
   sleep 2
 done
 k -n grafana rollout status deployment/grafana-deployment --timeout=300s
@@ -840,7 +844,10 @@ ns = "ai-observability"
 meta = lambda name: {"name": name, "namespace": ns}
 model_digest = "8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684"
 # Official llama.cpp CPU-only amd64 image, pinned from the registry on 2026-10-04.
-image = "ghcr.io/ggml-org/llama.cpp@sha256:1cdfea0828170c34d56a8a6d9fc5a0898e8bca3762e5ec6be0c01032f7f7bde8"
+image = (
+    "ghcr.io/ggml-org/llama.cpp@sha256:"
+    "1cdfea0828170c34d56a8a6d9fc5a0898e8bca3762e5ec6be0c01032f7f7bde8"
+)
 items = [
     {
         "apiVersion": "v1",
@@ -853,8 +860,13 @@ items = [
     }
 ]
 download = f"""set -eu
-if [ -f /models/smollm2.gguf ] && echo '{model_digest}  /models/smollm2.gguf' | sha256sum -c -; then exit 0; fi
-curl --fail --location --retry 3 https://registry.ollama.ai/v2/library/smollm2/blobs/sha256:{model_digest} -o /models/smollm2.gguf.part
+if [ -f /models/smollm2.gguf ] && \\
+  echo '{model_digest}  /models/smollm2.gguf' | sha256sum -c -; then
+  exit 0
+fi
+curl --fail --location --retry 3 \\
+  https://registry.ollama.ai/v2/library/smollm2/blobs/sha256:{model_digest} \\
+  -o /models/smollm2.gguf.part
 echo '{model_digest}  /models/smollm2.gguf.part' | sha256sum -c -
 mv /models/smollm2.gguf.part /models/smollm2.gguf
 """
@@ -862,28 +874,17 @@ server = {
     "name": "model",
     "image": image,
     "args": [
-        "--model",
-        "/models/smollm2.gguf",
-        "--alias",
-        "smollm2:135m-instruct-q4_K_M",
-        "--host",
-        "0.0.0.0",
-        "--port",
-        "8080",
-        "--ctx-size",
-        "512",
-        "--parallel",
-        "1",
-        "--threads",
-        "2",
-        "--threads-batch",
-        "2",
-        "--n-gpu-layers",
-        "0",
-        "--batch-size",
-        "64",
-        "--ubatch-size",
-        "64",
+        "--model", "/models/smollm2.gguf",
+        "--alias", "smollm2:135m-instruct-q4_K_M",
+        "--host", "0.0.0.0",
+        "--port", "8080",
+        "--ctx-size", "512",
+        "--parallel", "1",
+        "--threads", "2",
+        "--threads-batch", "2",
+        "--n-gpu-layers", "0",
+        "--batch-size", "64",
+        "--ubatch-size", "64",
         "--metrics",
     ],
     "ports": [{"name": "http", "containerPort": 8080}],
@@ -1012,7 +1013,8 @@ k -n ai-observability rollout status deployment/smollm-client --timeout=180s
 Check the injected init image and bootstrap log:
 
 ```bash
-k -n ai-observability get pod -l app=smollm-client   -o jsonpath='{.items[0].spec.initContainers[0].image}'
+k -n ai-observability get pod -l app=smollm-client \
+  -o jsonpath='{.items[0].spec.initContainers[0].image}'
 k -n ai-observability logs deployment/smollm-client --tail=20
 k -n ai-observability logs deployment/smollm-model -c download-model --tail=10
 ```
@@ -1227,11 +1229,17 @@ def resource(base, rate=False):
         if rate
         else f"{base}{{{pod},{selector}}}"
     )
-    return f'(sum by(pod) ({value("container=\"\"")}) or sum by(pod) ({value("container!=\"\",container!=\"POD\"")}))'
+    return (
+        f'(sum by(pod) ({value("container=\"\"")}) '
+        f'or sum by(pod) ({value("container!=\"\",container!=\"POD\"")}))'
+    )
 
 
 def limits(metric):
-    return f'label_replace(sum by(k8s_pod_name) ({metric}{{{k8s}}}), "pod", "$1", "k8s_pod_name", "(.*)")'
+    return (
+        f'label_replace(sum by(k8s_pod_name) ({metric}{{{k8s}}}), '
+        '"pod", "$1", "k8s_pod_name", "(.*)")'
+    )
 
 
 row("Service health and traffic")
@@ -1359,7 +1367,10 @@ panel(
     quantiles("local_llm_http_duration_seconds", http),
     "s",
     x=0,
-    desc="Histogram estimates over the rate window. Low request volume limits percentile precision.",
+    desc=(
+        "Histogram estimates over the rate window. Low request volume limits "
+        "percentile precision."
+    ),
 )
 panel(
     "First model token: p50 / p95 / p99",
@@ -1373,7 +1384,10 @@ panel(
     quantiles("gen_ai_client_operation_duration_seconds", sdk),
     "s",
     x=0,
-    desc="SDK streaming operation duration; compare with gateway latency for application overhead.",
+    desc=(
+        "SDK streaming operation duration; compare with gateway latency for "
+        "application overhead."
+    ),
 )
 panel(
     "Illustrative fast-success SLI (≤1 s)",
@@ -1440,7 +1454,8 @@ panel(
         (
             "{{gen_ai_token_type}}",
             (
-                f"sum by(gen_ai_token_type) (increase(gen_ai_client_token_usage_sum{{{sdk}}}[$__range])"
+                f"sum by(gen_ai_token_type) (increase("
+                f"gen_ai_client_token_usage_sum{{{sdk}}}[$__range])"
                 f")"
             ),
         )
@@ -1462,7 +1477,9 @@ panel(
         (
             kind,
             (
-                f'histogram_quantile(0.95,sum by(le) (rate(gen_ai_client_token_usage_bucket{{{sdk},gen_ai_token_type="{kind}"}}[{r}])'
+                f'histogram_quantile(0.95,sum by(le) (rate('
+                f'gen_ai_client_token_usage_bucket{{{sdk},'
+                f'gen_ai_token_type="{kind}"}}[{r}])'
                 f"))"
             ),
         )
@@ -1525,7 +1542,10 @@ panel(
     ),
     "s",
     x=12,
-    desc="Weighted server decode time / generated tokens, not a per-request latency percentile.",
+    desc=(
+        "Weighted server decode time / generated tokens, not a per-request "
+        "latency percentile."
+    ),
 )
 y += 8
 
@@ -1588,7 +1608,10 @@ panel(
     ),
     "percent",
     x=0,
-    desc="Throttled CFS periods / elapsed CFS periods by pod. An idle denominator yields no percentage.",
+    desc=(
+        "Throttled CFS periods / elapsed CFS periods by pod. An idle denominator "
+        "yields no percentage."
+    ),
 )
 panel(
     "OOM events and container restarts",
@@ -1628,7 +1651,10 @@ panel(
     x=12,
     w=12,
     h=8,
-    desc="Kubernetes readiness from the existing Collector. Missing data is not treated as ready.",
+    desc=(
+        "Kubernetes readiness from the existing Collector. Missing data is not "
+        "treated as ready."
+    ),
 )
 y += 8
 
@@ -1638,7 +1664,10 @@ panel(
     [
         (
             "{{job}}",
-            'up{job=~"smollm-model|smollm-client|openlit|collector-internal|kubelet-cadvisor|tempo"}',
+            (
+                'up{job=~"smollm-model|smollm-client|openlit|collector-internal'
+                '|kubelet-cadvisor|tempo"}'
+            ),
         )
     ],
     kind="stat",
@@ -1656,11 +1685,17 @@ panel(
     [
         (
             "spans / s",
-            'sum(rate(otelcol_receiver_accepted_spans{receiver="otlp"}[$__rate_interval]))',
+            (
+                'sum(rate(otelcol_receiver_accepted_spans{'
+                'receiver="otlp"}[$__rate_interval]))'
+            ),
         ),
         (
             "metric points / s",
-            'sum(rate(otelcol_receiver_accepted_metric_points{receiver="otlp"}[$__rate_interval]))',
+            (
+                'sum(rate(otelcol_receiver_accepted_metric_points{'
+                'receiver="otlp"}[$__rate_interval]))'
+            ),
         ),
     ],
     x=0,
@@ -1670,15 +1705,24 @@ panel(
     [
         (
             "refused spans / s",
-            'sum(rate(otelcol_receiver_refused_spans{receiver="otlp"}[$__rate_interval]))',
+            (
+                'sum(rate(otelcol_receiver_refused_spans{'
+                'receiver="otlp"}[$__rate_interval]))'
+            ),
         ),
         (
             "failed sends / s",
-            'sum(rate(otelcol_exporter_send_failed_spans{exporter="otlp/tempo"}[$__rate_interval]))',
+            (
+                'sum(rate(otelcol_exporter_send_failed_spans{'
+                'exporter="otlp/tempo"}[$__rate_interval]))'
+            ),
         ),
         (
             "enqueue failures / s",
-            'sum(rate(otelcol_exporter_enqueue_failed_spans{exporter="otlp/tempo"}[$__rate_interval]))',
+            (
+                'sum(rate(otelcol_exporter_enqueue_failed_spans{'
+                'exporter="otlp/tempo"}[$__rate_interval]))'
+            ),
         ),
     ],
     x=12,
@@ -1792,14 +1836,16 @@ kubectl --context "$CLUSTER" -n grafana port-forward svc/grafana-service 3000:30
 Open **http://localhost:3000/d/smollm-local**. Username: `admin`. Retrieve the generated password:
 
 ```bash
-kubectl --context "$CLUSTER" -n grafana get secret grafana-admin   -o jsonpath='{.data.GF_SECURITY_ADMIN_PASSWORD}' | base64 --decode
+kubectl --context "$CLUSTER" -n grafana get secret grafana-admin \
+  -o jsonpath='{.data.GF_SECURITY_ADMIN_PASSWORD}' | base64 --decode
 ```
 
 In another terminal, leave the gateway forwarding running:
 
 ```bash
 export CLUSTER="llm-lab"  # use the same profile name
-kubectl --context "$CLUSTER" -n ai-observability port-forward svc/smollm-client 8080:8080
+kubectl --context "$CLUSTER" -n ai-observability \
+  port-forward svc/smollm-client 8080:8080
 ```
 
 Send real requests from another terminal. No provider API key or account is needed.
@@ -1839,7 +1885,8 @@ Expected: all deployments ready, PVCs Bound, exactly one managed dashboard, and 
 On the dashboard, check HTTP 200 traffic, input/output token counts, first-token latency, completion finish reasons, memory/CPU usage, and every scrape-health target. For independent Prometheus checks, forward it in another terminal:
 
 ```bash
-kubectl --context "$CLUSTER" -n ai-observability port-forward svc/prometheus 9090:9090
+kubectl --context "$CLUSTER" -n ai-observability \
+  port-forward svc/prometheus 9090:9090
 ```
 
 ```bash
@@ -1873,8 +1920,9 @@ Open a `chat smollm2:135m-instruct-q4_K_M` trace. Check duration, token attribut
 A malformed prompt should produce HTTP 400, which is counted separately from valid-request success:
 
 ```bash
-curl -sS -o /dev/null -w 'HTTP %{http_code}
-' http://localhost:8080/chat   -H 'Content-Type: application/json' -d '{"prompt":""}'
+curl -sS -o /dev/null -w 'HTTP %{http_code}\n' http://localhost:8080/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt":""}'
 ```
 
 Optionally issue a small finite burst of real requests to exercise rejection and queueing. This is a bounded verification, not continuous traffic generation:
@@ -1882,7 +1930,10 @@ Optionally issue a small finite burst of real requests to exercise rejection and
 Save the following as `verify-burst.py`:
 
 ```python
-import concurrent.futures, json, urllib.request, urllib.error
+import concurrent.futures
+import json
+import urllib.error
+import urllib.request
 
 
 def call(_):
@@ -1934,10 +1985,12 @@ For application changes, edit the source created in step 6, rebuild the client i
 Scale inference down when unused, retaining the model PVC:
 
 ```bash
-kubectl --context "$CLUSTER" -n ai-observability scale   deployment/smollm-model deployment/smollm-client --replicas=0
+kubectl --context "$CLUSTER" -n ai-observability scale \
+  deployment/smollm-model deployment/smollm-client --replicas=0
 
 # Resume:
-kubectl --context "$CLUSTER" -n ai-observability scale   deployment/smollm-model deployment/smollm-client --replicas=1
+kubectl --context "$CLUSTER" -n ai-observability scale \
+  deployment/smollm-model deployment/smollm-client --replicas=1
 ```
 
 ## 12. Operational response guide
@@ -1960,9 +2013,12 @@ Useful commands:
 ```bash
 kubectl --context "$CLUSTER" -n ai-observability get events --sort-by=.lastTimestamp
 kubectl --context "$CLUSTER" -n ai-observability describe pod -l app=smollm-client
-kubectl --context "$CLUSTER" -n ai-observability logs deployment/smollm-client --tail=50
-kubectl --context "$CLUSTER" -n ai-observability logs deployment/smollm-model -c download-model --tail=30
-kubectl --context "$CLUSTER" -n ai-observability logs deployment/otel-collector --tail=50
+kubectl --context "$CLUSTER" -n ai-observability \
+  logs deployment/smollm-client --tail=50
+kubectl --context "$CLUSTER" -n ai-observability \
+  logs deployment/smollm-model -c download-model --tail=30
+kubectl --context "$CLUSTER" -n ai-observability \
+  logs deployment/otel-collector --tail=50
 kubectl --context "$CLUSTER" -n ai-observability logs deployment/tempo --tail=50
 ```
 
