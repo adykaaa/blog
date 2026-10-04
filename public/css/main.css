@@ -478,6 +478,48 @@ img { max-width: 100%; height: auto; display: block; }
   box-shadow: none;
 }
 
+/* Long runbooks keep prose readable while giving source code room. */
+.content-wrap:has(.runbook) {
+  max-width: 1120px;
+}
+.runbook .post-header,
+.runbook .post-footer,
+.runbook .post-content > :not(.highlight):not(pre):not(table) {
+  max-width: var(--max-w);
+  margin-left: auto;
+  margin-right: auto;
+}
+.runbook .post-content table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.runbook .post-content :not(pre) > code {
+  overflow-wrap: anywhere;
+}
+.post-content pre {
+  max-width: 100%;
+  background: #282a36;
+  color: #f8f8f2;
+  scrollbar-width: thin;
+  scrollbar-color: #6272a4 #282a36;
+}
+.post-content pre code {
+  width: max-content;
+  min-width: 100%;
+  white-space: pre;
+  overflow-wrap: normal;
+  tab-size: 4;
+  font-size: 14px;
+  line-height: 1.6;
+}
+@media (max-width: 640px) {
+  .post-content pre code {
+    padding: 16px;
+    font-size: 13px;
+  }
+}
+
 /* Tables */
 .post-content table {
   width: 100%;

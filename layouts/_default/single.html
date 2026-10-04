@@ -1,5 +1,5 @@
 {{ define "main" }}
-<article class="single-post">
+<article class="single-post{{ if .Params.wideCode }} runbook{{ end }}">
   <header class="post-header">
     <div class="post-meta">
       <time datetime="{{ .Date.Format "2006-01-02" }}" class="post-date">{{ .Date.Format "January 2, 2006" }}</time>

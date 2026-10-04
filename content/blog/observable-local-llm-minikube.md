@@ -4,6 +4,7 @@ date: 2026-10-04T18:00:00+02:00
 description: "A complete CPU-only local LLM runbook with OpenLIT, Prometheus, Tempo, and one Grafana operations dashboard."
 tags: ["Kubernetes", "AI", "Observability", "Grafana"]
 draft: false
+wideCode: true
 ---
 
 I wanted to see what a local LLM was doing without building a large observability platform around it. The result is a small CPU-only model on minikube, OpenLIT instrumentation, Prometheus and Tempo, and one Grafana dashboard focused on the questions I care about as a platform engineer: is it available, how long do requests take, where does capacity run out, and can I follow an individual inference request?
@@ -120,13 +121,16 @@ fi
 Server-side apply avoids oversized client-side CRD annotations. The operator watches the `grafana` namespace. Credentials are generated once and stored in a Secret; no password is embedded in this guide.
 
 ```bash
-k apply --server-side -f https://github.com/grafana/grafana-operator/releases/download/v5.25.0/kustomize-namespace_scoped.yaml
+k apply --server-side -f \
+  https://github.com/grafana/grafana-operator/releases/download/v5.25.0/kustomize-namespace_scoped.yaml
 k wait --for=condition=Established crd/grafanas.grafana.integreatly.org --timeout=180s
 k -n grafana rollout status deployment/grafana-operator-controller-manager --timeout=300s
 
 if ! k -n grafana get secret grafana-admin >/dev/null 2>&1; then
   GRAFANA_INITIAL_PASSWORD=$(openssl rand -hex 24)
-  k -n grafana create secret generic grafana-admin     --from-literal=GF_SECURITY_ADMIN_USER=admin     --from-literal=GF_SECURITY_ADMIN_PASSWORD="$GRAFANA_INITIAL_PASSWORD"
+  k -n grafana create secret generic grafana-admin \
+    --from-literal=GF_SECURITY_ADMIN_USER=admin \
+    --from-literal=GF_SECURITY_ADMIN_PASSWORD="$GRAFANA_INITIAL_PASSWORD"
   unset GRAFANA_INITIAL_PASSWORD
 fi
 
@@ -201,11 +205,12 @@ Save the following as `build-stack.py`:
 import hashlib
 import json
 from pathlib import Path
-root=Path(".")
-ns='ai-observability'
-items=[{'apiVersion':'v1','kind':'Namespace','metadata':{'name':ns}}]
-configs={
-'prometheus':'''global:
+
+root = Path(".")
+ns = "ai-observability"
+items = [{"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": ns}}]
+configs = {
+    "prometheus": """global:
   scrape_interval: 15s
 scrape_configs:
   - job_name: openlit
@@ -247,8 +252,8 @@ scrape_configs:
   - job_name: prometheus
     static_configs:
       - targets: ['localhost:9090']
-''',
-'otel-collector':'''receivers:
+""",
+    "otel-collector": """receivers:
   k8s_cluster:
     auth_type: serviceAccount
     collection_interval: 30s
@@ -310,8 +315,8 @@ service:
       receivers: [otlp, k8s_cluster]
       processors: [memory_limiter, batch]
       exporters: [prometheus]
-''',
- 'tempo':'''server:
+""",
+    "tempo": """server:
   http_listen_port: 3200
 distributor:
   receivers:
@@ -333,36 +338,232 @@ storage:
       path: /data/wal
     local:
       path: /data/blocks
-'''}
-images={'prometheus':'prom/prometheus:v3.15.0','tempo':'grafana/tempo:2.10.8','otel-collector':'otel/opentelemetry-collector-contrib:0.161.0'}
-ports={'prometheus':{'http':9090},'tempo':{'http':3200,'otlp-grpc':4317,'otlp-http':4318},'otel-collector':{'otlp-grpc':4317,'otlp-http':4318,'metrics':8889,'internal':8888,'health':13133}}
-args={'prometheus':['--config.file=/etc/observability/config.yaml','--storage.tsdb.path=/data','--storage.tsdb.retention.time=24h','--storage.tsdb.retention.size=512MB'],'tempo':['-config.file=/etc/observability/config.yaml'],'otel-collector':['--config=/etc/observability/config.yaml']}
-for name,config in configs.items():
-    meta={'name':name,'namespace':ns}
-    items.append({'apiVersion':'v1','kind':'ConfigMap','metadata':meta,'data':{'config.yaml':config}})
-    volumes=[{'name':'config','configMap':{'name':name}}]
-    mounts=[{'name':'config','mountPath':'/etc/observability','readOnly':True}]
-    if name!='otel-collector':
-        items.append({'apiVersion':'v1','kind':'PersistentVolumeClaim','metadata':meta,'spec':{'accessModes':['ReadWriteOnce'],'resources':{'requests':{'storage':'2Gi' if name=='tempo' else '1Gi'}}}})
-        volumes.append({'name':'data','persistentVolumeClaim':{'claimName':name}}); mounts.append({'name':'data','mountPath':'/data'})
-    health={'prometheus':('/-/ready',9090),'tempo':('/ready',3200),'otel-collector':('/',13133)}[name]
-    container={'name':name,'image':images[name],'args':args[name],'ports':[{'name':k,'containerPort':v} for k,v in ports[name].items()],'volumeMounts':mounts,'resources':{'requests':{'cpu':'25m','memory':'64Mi' if name!='otel-collector' else '32Mi'},'limits':{'cpu':'500m','memory':'256Mi' if name!='otel-collector' else '128Mi'}},'readinessProbe':{'httpGet':{'path':health[0],'port':health[1]},'initialDelaySeconds':5,'periodSeconds':5},'env':[{'name':'GOMEMLIMIT','value':'100MiB' if name=='otel-collector' else '200MiB'}]}
-    items.append({'apiVersion':'apps/v1','kind':'Deployment','metadata':meta,'spec':{'replicas':1,'strategy':{'type':'Recreate'},'selector':{'matchLabels':{'app':name}},'template':{'metadata':{'labels':{'app':name},'annotations':{'config-sha256':hashlib.sha256(config.encode()).hexdigest()}},'spec':{'serviceAccountName': name if name in ['prometheus','otel-collector'] else 'default','securityContext':{'fsGroup':10001},'containers':[container],'volumes':volumes}}}})
-    items.append({'apiVersion':'v1','kind':'Service','metadata':meta,'spec':{'selector':{'app':name},'ports':[{'name':k,'port':v,'targetPort':v} for k,v in ports[name].items()]}})
-for name in ['prometheus','otel-collector']:
-    items.append({'apiVersion':'v1','kind':'ServiceAccount','metadata':{'name':name,'namespace':ns}})
+""",
+}
+images = {
+    "prometheus": "prom/prometheus:v3.15.0",
+    "tempo": "grafana/tempo:2.10.8",
+    "otel-collector": "otel/opentelemetry-collector-contrib:0.161.0",
+}
+ports = {
+    "prometheus": {"http": 9090},
+    "tempo": {"http": 3200, "otlp-grpc": 4317, "otlp-http": 4318},
+    "otel-collector": {
+        "otlp-grpc": 4317,
+        "otlp-http": 4318,
+        "metrics": 8889,
+        "internal": 8888,
+        "health": 13133,
+    },
+}
+args = {
+    "prometheus": [
+        "--config.file=/etc/observability/config.yaml",
+        "--storage.tsdb.path=/data",
+        "--storage.tsdb.retention.time=24h",
+        "--storage.tsdb.retention.size=512MB",
+    ],
+    "tempo": ["-config.file=/etc/observability/config.yaml"],
+    "otel-collector": ["--config=/etc/observability/config.yaml"],
+}
+for name, config in configs.items():
+    meta = {"name": name, "namespace": ns}
+    items.append(
+        {
+            "apiVersion": "v1",
+            "kind": "ConfigMap",
+            "metadata": meta,
+            "data": {"config.yaml": config},
+        }
+    )
+    volumes = [{"name": "config", "configMap": {"name": name}}]
+    mounts = [{"name": "config", "mountPath": "/etc/observability", "readOnly": True}]
+    if name != "otel-collector":
+        items.append(
+            {
+                "apiVersion": "v1",
+                "kind": "PersistentVolumeClaim",
+                "metadata": meta,
+                "spec": {
+                    "accessModes": ["ReadWriteOnce"],
+                    "resources": {
+                        "requests": {"storage": "2Gi" if name == "tempo" else "1Gi"}
+                    },
+                },
+            }
+        )
+        volumes.append({"name": "data", "persistentVolumeClaim": {"claimName": name}})
+        mounts.append({"name": "data", "mountPath": "/data"})
+    health = {
+        "prometheus": ("/-/ready", 9090),
+        "tempo": ("/ready", 3200),
+        "otel-collector": ("/", 13133),
+    }[name]
+    container = {
+        "name": name,
+        "image": images[name],
+        "args": args[name],
+        "ports": [{"name": k, "containerPort": v} for k, v in ports[name].items()],
+        "volumeMounts": mounts,
+        "resources": {
+            "requests": {
+                "cpu": "25m",
+                "memory": "64Mi" if name != "otel-collector" else "32Mi",
+            },
+            "limits": {
+                "cpu": "500m",
+                "memory": "256Mi" if name != "otel-collector" else "128Mi",
+            },
+        },
+        "readinessProbe": {
+            "httpGet": {"path": health[0], "port": health[1]},
+            "initialDelaySeconds": 5,
+            "periodSeconds": 5,
+        },
+        "env": [
+            {
+                "name": "GOMEMLIMIT",
+                "value": "100MiB" if name == "otel-collector" else "200MiB",
+            }
+        ],
+    }
+    items.append(
+        {
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "metadata": meta,
+            "spec": {
+                "replicas": 1,
+                "strategy": {"type": "Recreate"},
+                "selector": {"matchLabels": {"app": name}},
+                "template": {
+                    "metadata": {
+                        "labels": {"app": name},
+                        "annotations": {
+                            "config-sha256": hashlib.sha256(config.encode()).hexdigest()
+                        },
+                    },
+                    "spec": {
+                        "serviceAccountName": (
+                            name
+                            if name in ["prometheus", "otel-collector"]
+                            else "default"
+                        ),
+                        "securityContext": {"fsGroup": 10001},
+                        "containers": [container],
+                        "volumes": volumes,
+                    },
+                },
+            },
+        }
+    )
+    items.append(
+        {
+            "apiVersion": "v1",
+            "kind": "Service",
+            "metadata": meta,
+            "spec": {
+                "selector": {"app": name},
+                "ports": [
+                    {"name": k, "port": v, "targetPort": v}
+                    for k, v in ports[name].items()
+                ],
+            },
+        }
+    )
+for name in ["prometheus", "otel-collector"]:
+    items.append(
+        {
+            "apiVersion": "v1",
+            "kind": "ServiceAccount",
+            "metadata": {"name": name, "namespace": ns},
+        }
+    )
 items += [
-    {'apiVersion':'rbac.authorization.k8s.io/v1','kind':'ClusterRole','metadata':{'name':'llm-prometheus-kubelet'},'rules':[{'apiGroups':[''],'resources':['nodes'],'verbs':['get','list','watch']},{'apiGroups':[''],'resources':['nodes/proxy'],'verbs':['get']}]},
-    {'apiVersion':'rbac.authorization.k8s.io/v1','kind':'ClusterRoleBinding','metadata':{'name':'llm-prometheus-kubelet'},'roleRef':{'apiGroup':'rbac.authorization.k8s.io','kind':'ClusterRole','name':'llm-prometheus-kubelet'},'subjects':[{'kind':'ServiceAccount','name':'prometheus','namespace':ns}]},
-    {'apiVersion':'rbac.authorization.k8s.io/v1','kind':'Role','metadata':{'name':'otel-k8s-metadata','namespace':ns},'rules':[
-        {'apiGroups':[''],'resources':['pods','services','events','replicationcontrollers','resourcequotas'],'verbs':['get','list','watch']},
-        {'apiGroups':['apps'],'resources':['deployments','replicasets','daemonsets','statefulsets'],'verbs':['get','list','watch']},
-        {'apiGroups':['batch'],'resources':['jobs','cronjobs'],'verbs':['get','list','watch']},
-        {'apiGroups':['autoscaling'],'resources':['horizontalpodautoscalers'],'verbs':['get','list','watch']},
-        {'apiGroups':['discovery.k8s.io'],'resources':['endpointslices'],'verbs':['get','list','watch']}]},
-    {'apiVersion':'rbac.authorization.k8s.io/v1','kind':'RoleBinding','metadata':{'name':'otel-k8s-metadata','namespace':ns},'roleRef':{'apiGroup':'rbac.authorization.k8s.io','kind':'Role','name':'otel-k8s-metadata'},'subjects':[{'kind':'ServiceAccount','name':'otel-collector','namespace':ns}]}
+    {
+        "apiVersion": "rbac.authorization.k8s.io/v1",
+        "kind": "ClusterRole",
+        "metadata": {"name": "llm-prometheus-kubelet"},
+        "rules": [
+            {
+                "apiGroups": [""],
+                "resources": ["nodes"],
+                "verbs": ["get", "list", "watch"],
+            },
+            {"apiGroups": [""], "resources": ["nodes/proxy"], "verbs": ["get"]},
+        ],
+    },
+    {
+        "apiVersion": "rbac.authorization.k8s.io/v1",
+        "kind": "ClusterRoleBinding",
+        "metadata": {"name": "llm-prometheus-kubelet"},
+        "roleRef": {
+            "apiGroup": "rbac.authorization.k8s.io",
+            "kind": "ClusterRole",
+            "name": "llm-prometheus-kubelet",
+        },
+        "subjects": [{"kind": "ServiceAccount", "name": "prometheus", "namespace": ns}],
+    },
+    {
+        "apiVersion": "rbac.authorization.k8s.io/v1",
+        "kind": "Role",
+        "metadata": {"name": "otel-k8s-metadata", "namespace": ns},
+        "rules": [
+            {
+                "apiGroups": [""],
+                "resources": [
+                    "pods",
+                    "services",
+                    "events",
+                    "replicationcontrollers",
+                    "resourcequotas",
+                ],
+                "verbs": ["get", "list", "watch"],
+            },
+            {
+                "apiGroups": ["apps"],
+                "resources": [
+                    "deployments",
+                    "replicasets",
+                    "daemonsets",
+                    "statefulsets",
+                ],
+                "verbs": ["get", "list", "watch"],
+            },
+            {
+                "apiGroups": ["batch"],
+                "resources": ["jobs", "cronjobs"],
+                "verbs": ["get", "list", "watch"],
+            },
+            {
+                "apiGroups": ["autoscaling"],
+                "resources": ["horizontalpodautoscalers"],
+                "verbs": ["get", "list", "watch"],
+            },
+            {
+                "apiGroups": ["discovery.k8s.io"],
+                "resources": ["endpointslices"],
+                "verbs": ["get", "list", "watch"],
+            },
+        ],
+    },
+    {
+        "apiVersion": "rbac.authorization.k8s.io/v1",
+        "kind": "RoleBinding",
+        "metadata": {"name": "otel-k8s-metadata", "namespace": ns},
+        "roleRef": {
+            "apiGroup": "rbac.authorization.k8s.io",
+            "kind": "Role",
+            "name": "otel-k8s-metadata",
+        },
+        "subjects": [
+            {"kind": "ServiceAccount", "name": "otel-collector", "namespace": ns}
+        ],
+    },
 ]
-(root/'stack.json').write_text(json.dumps({'apiVersion':'v1','kind':'List','items':items},indent=2)+'\n')
+(root / "stack.json").write_text(
+    json.dumps({"apiVersion": "v1", "kind": "List", "items": items}, indent=2) + "\n"
+)
 print(images)
 ```
 
@@ -381,7 +582,9 @@ The model/client scrape targets will be down until step 6 deploys them. This is 
 ```bash
 "$HELM" repo add openlit https://openlit.github.io/helm/
 "$HELM" repo update openlit
-"$HELM" upgrade --install openlit-operator openlit/openlit-operator   --version 0.2.2 --kube-context "$CLUSTER"   --namespace openlit --create-namespace -f - <<'YAML'
+"$HELM" upgrade --install openlit-operator openlit/openlit-operator \
+  --version 0.2.2 --kube-context "$CLUSTER" \
+  --namespace openlit --create-namespace -f - <<'YAML'
 operator:
   defaultInitImage: ghcr.io/openlit/openlit-ai-instrumentation:0.0.2
 resources:
@@ -429,6 +632,7 @@ Save the following as `app.py`:
 
 ```python
 """Local LLM gateway with bounded admission and low-cardinality Prometheus metrics."""
+
 import json
 import os
 import threading
@@ -437,90 +641,129 @@ from collections import Counter
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from openai import OpenAI, BadRequestError, APITimeoutError
 
-MODEL = 'smollm2:135m-instruct-q4_K_M'
+MODEL = "smollm2:135m-instruct-q4_K_M"
 MAX_INFLIGHT = 2
 CONTEXT_LIMIT = 512
-client = OpenAI(base_url=os.environ['MODEL_BASE_URL'], api_key='local-no-key', timeout=60, max_retries=0)
+client = OpenAI(
+    base_url=os.environ["MODEL_BASE_URL"],
+    api_key="local-no-key",
+    timeout=60,
+    max_retries=0,
+)
 slots = threading.BoundedSemaphore(MAX_INFLIGHT)
 lock = threading.Lock()
 requests = Counter({str(s): 0 for s in [200, 400, 413, 429, 502, 504]})
-finishes = Counter({s: 0 for s in ['stop', 'length', 'other']})
+finishes = Counter({s: 0 for s in ["stop", "length", "other"]})
 inflight = 0
 histograms = {}
-for name in ['local_llm_http_duration_seconds', 'local_llm_first_token_seconds']:
-    histograms[name] = {'bounds': [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60],
-                        'counts': [0]*12, 'count': 0, 'sum': 0.0}
+for name in ["local_llm_http_duration_seconds", "local_llm_first_token_seconds"]:
+    histograms[name] = {
+        "bounds": [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60],
+        "counts": [0] * 12,
+        "count": 0,
+        "sum": 0.0,
+    }
+
 
 def observe(name, value):
     with lock:
         h = histograms[name]
-        h['count'] += 1
-        h['sum'] += value
-        for i, bound in enumerate(h['bounds']):
-            h['counts'][i] += value <= bound
+        h["count"] += 1
+        h["sum"] += value
+        for i, bound in enumerate(h["bounds"]):
+            h["counts"][i] += value <= bound
+
 
 def metrics():
     with lock:
-        lines = ['# TYPE local_llm_http_requests_total counter']
-        lines += [f'local_llm_http_requests_total{{status="{s}"}} {n}' for s, n in requests.items()]
-        lines += ['# TYPE local_llm_completions_total counter']
-        lines += [f'local_llm_completions_total{{finish_reason="{s}"}} {n}' for s, n in finishes.items()]
-        lines += ['# TYPE local_llm_inflight_requests gauge', f'local_llm_inflight_requests {inflight}',
-                  '# TYPE local_llm_admission_capacity gauge', f'local_llm_admission_capacity {MAX_INFLIGHT}']
+        lines = ["# TYPE local_llm_http_requests_total counter"]
+        lines += [
+            f'local_llm_http_requests_total{{status="{s}"}} {n}'
+            for s, n in requests.items()
+        ]
+        lines += ["# TYPE local_llm_completions_total counter"]
+        lines += [
+            f'local_llm_completions_total{{finish_reason="{s}"}} {n}'
+            for s, n in finishes.items()
+        ]
+        lines += [
+            "# TYPE local_llm_inflight_requests gauge",
+            f"local_llm_inflight_requests {inflight}",
+            "# TYPE local_llm_admission_capacity gauge",
+            f"local_llm_admission_capacity {MAX_INFLIGHT}",
+        ]
         for name, h in histograms.items():
-            lines += [f'# TYPE {name} histogram']
-            lines += [f'{name}_bucket{{le="{b}"}} {n}' for b, n in zip(h['bounds'], h['counts'])]
-            lines += [f'{name}_bucket{{le="+Inf"}} {h["count"]}',
-                      f'{name}_sum {h["sum"]}', f'{name}_count {h["count"]}']
-        return '\n'.join(lines) + '\n'
+            lines += [f"# TYPE {name} histogram"]
+            lines += [
+                f'{name}_bucket{{le="{b}"}} {n}'
+                for b, n in zip(h["bounds"], h["counts"])
+            ]
+            lines += [
+                f'{name}_bucket{{le="+Inf"}} {h["count"]}',
+                f'{name}_sum {h["sum"]}',
+                f'{name}_count {h["count"]}',
+            ]
+        return "\n".join(lines) + "\n"
+
 
 class Handler(BaseHTTPRequestHandler):
-    def send(self, code, body, content_type='application/json'):
+    def send(self, code, body, content_type="application/json"):
         body = body.encode() if isinstance(body, str) else json.dumps(body).encode()
         self.send_response(code)
-        self.send_header('Content-Type', content_type)
-        self.send_header('Content-Length', str(len(body)))
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
 
     def do_GET(self):
-        if self.path == '/health':
-            self.send(200, {'status': 'ok', 'model': MODEL})
-        elif self.path == '/metrics':
-            self.send(200, metrics(), 'text/plain; version=0.0.4')
+        if self.path == "/health":
+            self.send(200, {"status": "ok", "model": MODEL})
+        elif self.path == "/metrics":
+            self.send(200, metrics(), "text/plain; version=0.0.4")
         else:
-            self.send(404, {'error': 'Use POST /chat with a JSON prompt.'})
+            self.send(404, {"error": "Use POST /chat with a JSON prompt."})
 
     def do_POST(self):
         global inflight
-        if self.path != '/chat':
-            self.send(404, {'error': 'Unknown endpoint'})
+        if self.path != "/chat":
+            self.send(404, {"error": "Unknown endpoint"})
             return
         start = time.monotonic()
         admitted = slots.acquire(blocking=False)
         status = 429
-        payload = {'error': 'Busy; at most two inference requests are admitted. Retry later.'}
+        payload = {
+            "error": "Busy; at most two inference requests are admitted. Retry later."
+        }
         if admitted:
             with lock:
                 inflight += 1
             try:
-                size = int(self.headers.get('Content-Length', '0'))
+                size = int(self.headers.get("Content-Length", "0"))
                 if not 0 < size <= 8192:
                     status = 413
-                    payload = {'error': 'Send a JSON body of 1–8192 bytes.'}
+                    payload = {"error": "Send a JSON body of 1–8192 bytes."}
                 else:
                     data = json.loads(self.rfile.read(size))
-                    prompt = data.get('prompt') if isinstance(data, dict) else None
-                    max_tokens = data.get('max_tokens', 64) if isinstance(data, dict) else None
-                    if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 2000:
-                        raise ValueError('prompt must contain 1–2000 characters.')
+                    prompt = data.get("prompt") if isinstance(data, dict) else None
+                    max_tokens = (
+                        data.get("max_tokens", 64) if isinstance(data, dict) else None
+                    )
+                    if (
+                        not isinstance(prompt, str)
+                        or not prompt.strip()
+                        or len(prompt) > 2000
+                    ):
+                        raise ValueError("prompt must contain 1–2000 characters.")
                     if type(max_tokens) is not int or not 1 <= max_tokens <= 64:
-                        raise ValueError('max_tokens must be an integer from 1 to 64.')
-                    text, usage, reason, ttft = [], None, 'other', None
+                        raise ValueError("max_tokens must be an integer from 1 to 64.")
+                    text, usage, reason, ttft = [], None, "other", None
                     with client.chat.completions.create(
-                        model=MODEL, messages=[{'role': 'user', 'content': prompt}],
-                        max_tokens=max_tokens, temperature=0.2, stream=True,
-                        stream_options={'include_usage': True},
+                        model=MODEL,
+                        messages=[{"role": "user", "content": prompt}],
+                        max_tokens=max_tokens,
+                        temperature=0.2,
+                        stream=True,
+                        stream_options={"include_usage": True},
                     ) as stream:
                         for chunk in stream:
                             if chunk.usage:
@@ -530,22 +773,31 @@ class Handler(BaseHTTPRequestHandler):
                                 if content:
                                     if ttft is None:
                                         ttft = time.monotonic() - start
-                                        observe('local_llm_first_token_seconds', ttft)
+                                        observe("local_llm_first_token_seconds", ttft)
                                     text.append(content)
                                 if choice.finish_reason:
-                                    reason = choice.finish_reason if choice.finish_reason in ['stop', 'length'] else 'other'
+                                    reason = (
+                                        choice.finish_reason
+                                        if choice.finish_reason in ["stop", "length"]
+                                        else "other"
+                                    )
                     with lock:
                         finishes[reason] += 1
                     status = 200
-                    payload = {'model': MODEL, 'response': ''.join(text), 'usage': usage,
-                               'finish_reason': reason, 'first_token_seconds': ttft,
-                               'duration_seconds': round(time.monotonic() - start, 3)}
+                    payload = {
+                        "model": MODEL,
+                        "response": "".join(text),
+                        "usage": usage,
+                        "finish_reason": reason,
+                        "first_token_seconds": ttft,
+                        "duration_seconds": round(time.monotonic() - start, 3),
+                    }
             except (ValueError, TypeError, BadRequestError) as exc:
-                status, payload = 400, {'error': str(exc)}
+                status, payload = 400, {"error": str(exc)}
             except APITimeoutError as exc:
-                status, payload = 504, {'error': str(exc)}
+                status, payload = 504, {"error": str(exc)}
             except Exception as exc:
-                status, payload = 502, {'error': str(exc)}
+                status, payload = 502, {"error": str(exc)}
             finally:
                 with lock:
                     inflight -= 1
@@ -553,13 +805,14 @@ class Handler(BaseHTTPRequestHandler):
         with lock:
             requests[str(status)] += 1
         if status == 200:
-            observe('local_llm_http_duration_seconds', time.monotonic() - start)
+            observe("local_llm_http_duration_seconds", time.monotonic() - start)
         try:
             self.send(status, payload)
         except (BrokenPipeError, ConnectionResetError):
             pass
 
-ThreadingHTTPServer(('0.0.0.0', 8080), Handler).serve_forever()
+
+ThreadingHTTPServer(("0.0.0.0", 8080), Handler).serve_forever()
 ```
 
 ```bash
@@ -579,28 +832,174 @@ The next code block contains the complete model and client deployment definition
 Save the following as `build-manifest.py`:
 
 ```python
-import hashlib,json
+import hashlib, json
 from pathlib import Path
-root=Path(".")
-ns='ai-observability'
-meta=lambda name: {'name':name,'namespace':ns}
-model_digest='8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684'
+
+root = Path(".")
+ns = "ai-observability"
+meta = lambda name: {"name": name, "namespace": ns}
+model_digest = "8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684"
 # Official llama.cpp CPU-only amd64 image, pinned from the registry on 2026-10-04.
-image='ghcr.io/ggml-org/llama.cpp@sha256:1cdfea0828170c34d56a8a6d9fc5a0898e8bca3762e5ec6be0c01032f7f7bde8'
-items=[{'apiVersion':'v1','kind':'PersistentVolumeClaim','metadata':meta('smollm-model'),'spec':{'accessModes':['ReadWriteOnce'],'resources':{'requests':{'storage':'512Mi'}}}}]
-download=f'''set -eu
+image = "ghcr.io/ggml-org/llama.cpp@sha256:1cdfea0828170c34d56a8a6d9fc5a0898e8bca3762e5ec6be0c01032f7f7bde8"
+items = [
+    {
+        "apiVersion": "v1",
+        "kind": "PersistentVolumeClaim",
+        "metadata": meta("smollm-model"),
+        "spec": {
+            "accessModes": ["ReadWriteOnce"],
+            "resources": {"requests": {"storage": "512Mi"}},
+        },
+    }
+]
+download = f"""set -eu
 if [ -f /models/smollm2.gguf ] && echo '{model_digest}  /models/smollm2.gguf' | sha256sum -c -; then exit 0; fi
 curl --fail --location --retry 3 https://registry.ollama.ai/v2/library/smollm2/blobs/sha256:{model_digest} -o /models/smollm2.gguf.part
 echo '{model_digest}  /models/smollm2.gguf.part' | sha256sum -c -
 mv /models/smollm2.gguf.part /models/smollm2.gguf
-'''
-server={'name':'model','image':image,'args':['--model','/models/smollm2.gguf','--alias','smollm2:135m-instruct-q4_K_M','--host','0.0.0.0','--port','8080','--ctx-size','512','--parallel','1','--threads','2','--threads-batch','2','--n-gpu-layers','0','--batch-size','64','--ubatch-size','64','--metrics'],'ports':[{'name':'http','containerPort':8080}],'volumeMounts':[{'name':'models','mountPath':'/models','readOnly':True}],'resources':{'requests':{'cpu':'50m','memory':'128Mi'},'limits':{'cpu':'2','memory':'384Mi'}},'startupProbe':{'httpGet':{'path':'/health','port':8080},'failureThreshold':60,'periodSeconds':5},'readinessProbe':{'httpGet':{'path':'/health','port':8080},'periodSeconds':10}}
-items.append({'apiVersion':'apps/v1','kind':'Deployment','metadata':meta('smollm-model'),'spec':{'replicas':1,'strategy':{'type':'Recreate'},'selector':{'matchLabels':{'app':'smollm-model'}},'template':{'metadata':{'labels':{'app':'smollm-model'}},'spec':{'initContainers':[{'name':'download-model','image':'curlimages/curl:8.17.0','command':['sh','-c',download],'securityContext':{'runAsUser':0},'resources':{'requests':{'cpu':'10m','memory':'16Mi'},'limits':{'cpu':'250m','memory':'64Mi'}},'volumeMounts':[{'name':'models','mountPath':'/models'}]}],'containers':[server],'volumes':[{'name':'models','persistentVolumeClaim':{'claimName':'smollm-model'}}]}}}})
-app={'name':'client','image':'local/smollm-client:1','imagePullPolicy':'Never','command':['python','-u','/app/app.py'],'ports':[{'name':'http','containerPort':8080}],'env':[{'name':'MODEL_BASE_URL','value':'http://smollm-model:8080/v1'},{'name':'OTEL_METRIC_EXPORT_INTERVAL','value':'15000'},{'name':'OPENLIT_DISABLE_EVENTS','value':'true'}],'resources':{'requests':{'cpu':'10m','memory':'96Mi'},'limits':{'cpu':'250m','memory':'192Mi'}},'readinessProbe':{'httpGet':{'path':'/health','port':8080},'initialDelaySeconds':5,'periodSeconds':10}}
-items.append({'apiVersion':'apps/v1','kind':'Deployment','metadata':meta('smollm-client'),'spec':{'replicas':1,'strategy':{'type':'Recreate'},'selector':{'matchLabels':{'app':'smollm-client'}},'template':{'metadata':{'labels':{'app':'smollm-client','instrumentation':'openlit'},'annotations':{'app-source-sha256':hashlib.sha256(root.joinpath('app.py').read_bytes()).hexdigest()}},'spec':{'containers':[app]}}}})
-for name in ['smollm-model','smollm-client']:
- items.append({'apiVersion':'v1','kind':'Service','metadata':meta(name),'spec':{'selector':{'app':name},'ports':[{'name':'http','port':8080,'targetPort':8080}]}})
-root.joinpath('deployment.json').write_text(json.dumps({'apiVersion':'v1','kind':'List','items':items},indent=2)+'\n')
+"""
+server = {
+    "name": "model",
+    "image": image,
+    "args": [
+        "--model",
+        "/models/smollm2.gguf",
+        "--alias",
+        "smollm2:135m-instruct-q4_K_M",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8080",
+        "--ctx-size",
+        "512",
+        "--parallel",
+        "1",
+        "--threads",
+        "2",
+        "--threads-batch",
+        "2",
+        "--n-gpu-layers",
+        "0",
+        "--batch-size",
+        "64",
+        "--ubatch-size",
+        "64",
+        "--metrics",
+    ],
+    "ports": [{"name": "http", "containerPort": 8080}],
+    "volumeMounts": [{"name": "models", "mountPath": "/models", "readOnly": True}],
+    "resources": {
+        "requests": {"cpu": "50m", "memory": "128Mi"},
+        "limits": {"cpu": "2", "memory": "384Mi"},
+    },
+    "startupProbe": {
+        "httpGet": {"path": "/health", "port": 8080},
+        "failureThreshold": 60,
+        "periodSeconds": 5,
+    },
+    "readinessProbe": {
+        "httpGet": {"path": "/health", "port": 8080},
+        "periodSeconds": 10,
+    },
+}
+items.append(
+    {
+        "apiVersion": "apps/v1",
+        "kind": "Deployment",
+        "metadata": meta("smollm-model"),
+        "spec": {
+            "replicas": 1,
+            "strategy": {"type": "Recreate"},
+            "selector": {"matchLabels": {"app": "smollm-model"}},
+            "template": {
+                "metadata": {"labels": {"app": "smollm-model"}},
+                "spec": {
+                    "initContainers": [
+                        {
+                            "name": "download-model",
+                            "image": "curlimages/curl:8.17.0",
+                            "command": ["sh", "-c", download],
+                            "securityContext": {"runAsUser": 0},
+                            "resources": {
+                                "requests": {"cpu": "10m", "memory": "16Mi"},
+                                "limits": {"cpu": "250m", "memory": "64Mi"},
+                            },
+                            "volumeMounts": [
+                                {"name": "models", "mountPath": "/models"}
+                            ],
+                        }
+                    ],
+                    "containers": [server],
+                    "volumes": [
+                        {
+                            "name": "models",
+                            "persistentVolumeClaim": {"claimName": "smollm-model"},
+                        }
+                    ],
+                },
+            },
+        },
+    }
+)
+app = {
+    "name": "client",
+    "image": "local/smollm-client:1",
+    "imagePullPolicy": "Never",
+    "command": ["python", "-u", "/app/app.py"],
+    "ports": [{"name": "http", "containerPort": 8080}],
+    "env": [
+        {"name": "MODEL_BASE_URL", "value": "http://smollm-model:8080/v1"},
+        {"name": "OTEL_METRIC_EXPORT_INTERVAL", "value": "15000"},
+        {"name": "OPENLIT_DISABLE_EVENTS", "value": "true"},
+    ],
+    "resources": {
+        "requests": {"cpu": "10m", "memory": "96Mi"},
+        "limits": {"cpu": "250m", "memory": "192Mi"},
+    },
+    "readinessProbe": {
+        "httpGet": {"path": "/health", "port": 8080},
+        "initialDelaySeconds": 5,
+        "periodSeconds": 10,
+    },
+}
+items.append(
+    {
+        "apiVersion": "apps/v1",
+        "kind": "Deployment",
+        "metadata": meta("smollm-client"),
+        "spec": {
+            "replicas": 1,
+            "strategy": {"type": "Recreate"},
+            "selector": {"matchLabels": {"app": "smollm-client"}},
+            "template": {
+                "metadata": {
+                    "labels": {"app": "smollm-client", "instrumentation": "openlit"},
+                    "annotations": {
+                        "app-source-sha256": hashlib.sha256(
+                            root.joinpath("app.py").read_bytes()
+                        ).hexdigest()
+                    },
+                },
+                "spec": {"containers": [app]},
+            },
+        },
+    }
+)
+for name in ["smollm-model", "smollm-client"]:
+    items.append(
+        {
+            "apiVersion": "v1",
+            "kind": "Service",
+            "metadata": meta(name),
+            "spec": {
+                "selector": {"app": name},
+                "ports": [{"name": "http", "port": 8080, "targetPort": 8080}],
+            },
+        }
+    )
+root.joinpath("deployment.json").write_text(
+    json.dumps({"apiVersion": "v1", "kind": "List", "items": items}, indent=2) + "\n"
+)
 ```
 
 ```bash
@@ -715,126 +1114,665 @@ Save the following as `build-dashboard.py`:
 
 ```python
 """Generate one Grafana dashboard; every PromQL query uses an emitted metric."""
+
 import json
 from pathlib import Path
-root=Path(".")
-ds={'type':'prometheus','uid':'ai-prometheus'}
-panels=[]; next_id=1; y=0
-sdk='service_name="smollm-client",gen_ai_request_model="smollm2:135m-instruct-q4_K_M"'
-http='job="smollm-client"'
-model='job="smollm-model"'
-k8s='k8s_namespace_name="ai-observability",k8s_pod_name=~"smollm-(model|client)-.*",k8s_container_name=~"model|client"'
-pod='job="kubelet-cadvisor",namespace="ai-observability",pod=~"smollm-(model|client)-.*"'
-r='$__rate_interval'
-valid=f'local_llm_http_requests_total{{{http},status=~"200|429|502|504"}}'
+
+root = Path(".")
+ds = {"type": "prometheus", "uid": "ai-prometheus"}
+panels = []
+next_id = 1
+y = 0
+sdk = 'service_name="smollm-client",gen_ai_request_model="smollm2:135m-instruct-q4_K_M"'
+http = 'job="smollm-client"'
+model = 'job="smollm-model"'
+k8s = (
+    'k8s_namespace_name="ai-observability",k8s_pod_name=~"smollm-(model|client)-.*",'
+    'k8s_container_name=~"model|client"'
+)
+pod = 'job="kubelet-cadvisor",namespace="ai-observability",pod=~"smollm-(model|client)-.*"'
+r = "$__rate_interval"
+valid = f'local_llm_http_requests_total{{{http},status=~"200|429|502|504"}}'
+
 
 def row(title):
- global next_id,y
- panels.append({'id':next_id,'type':'row','title':title,'collapsed':False,'panels':[],'gridPos':{'x':0,'y':y,'w':24,'h':1}})
- next_id+=1; y+=1
+    global next_id, y
+    panels.append(
+        {
+            "id": next_id,
+            "type": "row",
+            "title": title,
+            "collapsed": False,
+            "panels": [],
+            "gridPos": {"x": 0, "y": y, "w": 24, "h": 1},
+        }
+    )
+    next_id += 1
+    y += 1
 
-def panel(title,queries,unit='short',kind='timeseries',x=0,w=12,h=8,desc='',thresholds=None):
- global next_id
- if isinstance(queries,str):queries=[('value',queries)]
- defaults={'unit':unit,'decimals':2,'noValue':'No samples','color':{'mode':'palette-classic'}}
- if thresholds:defaults['thresholds']={'mode':'absolute','steps':thresholds}
- p={'id':next_id,'title':title,'description':desc,'type':kind,'datasource':ds,'gridPos':{'x':x,'y':y,'w':w,'h':h},'fieldConfig':{'defaults':defaults,'overrides':[]},'targets':[{'refId':chr(65+i),'expr':q,'legendFormat':label,'instant':kind=='stat'} for i,(label,q) in enumerate(queries)]}
- if kind=='stat':p['options']={'reduceOptions':{'calcs':['lastNotNull'],'fields':'','values':False},'colorMode':'value','graphMode':'none','textMode':'auto'}
- else:p['options']={'legend':{'displayMode':'table','placement':'bottom','calcs':['lastNotNull']},'tooltip':{'mode':'multi'}}
- panels.append(p);next_id+=1
 
-def quantiles(metric,selector=''):
- return [(f'p{int(q*100)}',f'histogram_quantile({q}, sum by(le) (rate({metric}_bucket{{{selector}}}[{r}])))') for q in [.5,.95,.99]]
+def panel(
+    title,
+    queries,
+    unit="short",
+    kind="timeseries",
+    x=0,
+    w=12,
+    h=8,
+    desc="",
+    thresholds=None,
+):
+    global next_id
+    if isinstance(queries, str):
+        queries = [("value", queries)]
+    defaults = {
+        "unit": unit,
+        "decimals": 2,
+        "noValue": "No samples",
+        "color": {"mode": "palette-classic"},
+    }
+    if thresholds:
+        defaults["thresholds"] = {"mode": "absolute", "steps": thresholds}
+    p = {
+        "id": next_id,
+        "title": title,
+        "description": desc,
+        "type": kind,
+        "datasource": ds,
+        "gridPos": {"x": x, "y": y, "w": w, "h": h},
+        "fieldConfig": {"defaults": defaults, "overrides": []},
+        "targets": [
+            {
+                "refId": chr(65 + i),
+                "expr": q,
+                "legendFormat": label,
+                "instant": kind == "stat",
+            }
+            for i, (label, q) in enumerate(queries)
+        ],
+    }
+    if kind == "stat":
+        p["options"] = {
+            "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False},
+            "colorMode": "value",
+            "graphMode": "none",
+            "textMode": "auto",
+        }
+    else:
+        p["options"] = {
+            "legend": {
+                "displayMode": "table",
+                "placement": "bottom",
+                "calcs": ["lastNotNull"],
+            },
+            "tooltip": {"mode": "multi"},
+        }
+    panels.append(p)
+    next_id += 1
 
-def resource(base,rate=False):
- value=lambda selector: f'rate({base}{{{pod},{selector}}}[{r}])' if rate else f'{base}{{{pod},{selector}}}'
- return f'(sum by(pod) ({value("container=\"\"")}) or sum by(pod) ({value("container!=\"\",container!=\"POD\"")}))'
+
+def quantiles(metric, selector=""):
+    return [
+        (
+            f"p{int(q*100)}",
+            f"histogram_quantile({q}, sum by(le) (rate({metric}_bucket{{{selector}}}[{r}])))",
+        )
+        for q in [0.5, 0.95, 0.99]
+    ]
+
+
+def resource(base, rate=False):
+    value = lambda selector: (
+        f"rate({base}{{{pod},{selector}}}[{r}])"
+        if rate
+        else f"{base}{{{pod},{selector}}}"
+    )
+    return f'(sum by(pod) ({value("container=\"\"")}) or sum by(pod) ({value("container!=\"\",container!=\"POD\"")}))'
+
 
 def limits(metric):
- return f'label_replace(sum by(k8s_pod_name) ({metric}{{{k8s}}}), "pod", "$1", "k8s_pod_name", "(.*)")'
+    return f'label_replace(sum by(k8s_pod_name) ({metric}{{{k8s}}}), "pod", "$1", "k8s_pod_name", "(.*)")'
 
-row('Service health and traffic')
-panel('Model ready',f'up{{{model}}}','short','stat',0,4,4,'Scrape/model availability, independent of whether traffic exists.',[{'color':'red','value':None},{'color':'green','value':1}])
-panel('Client ready',f'up{{{http}}}','short','stat',4,4,4,'Metrics endpoint availability. Check replicas below for Kubernetes readiness.',[{'color':'red','value':None},{'color':'green','value':1}])
-panel('Requests / selected range',f'sum(increase(local_llm_http_requests_total{{{http}}}[$__range]))','short','stat',8,4,4,'Counter increases over the selected window. Very first samples may not have a preceding baseline.')
-panel('Valid-request success / selected range',f'100 * sum(increase(local_llm_http_requests_total{{{http},status="200"}}[$__range])) / sum(increase({valid}[$__range]))','percent','stat',12,4,4,'Valid statuses: 200, 429, 502, 504. Input-validation errors are excluded. Idle windows have no success percentage.')
-panel('P95 successful request duration',quantiles('local_llm_http_duration_seconds',http)[1:2],'s','stat',16,4,4,'Successful request processing through the gateway, including server queueing. The HTTP response is buffered until complete.')
-panel('P95 first model token',quantiles('local_llm_first_token_seconds',http)[1:2],'s','stat',20,4,4,'Gateway arrival to first nonempty model stream chunk; includes queueing and prefill. This is not first-byte latency seen by the HTTP caller.')
-y+=4
-panel('HTTP requests by outcome',[( '{{status}}',f'sum by(status) (rate(local_llm_http_requests_total{{{http}}}[{r}]))')],'reqps',x=0)
-panel('HTTP failure and admission-rejection rates',[
- ('5xx / valid requests',f'100 * sum(rate(local_llm_http_requests_total{{{http},status=~"502|504"}}[{r}])) / sum(rate({valid}[{r}]))'),
- ('429 / valid requests',f'100 * sum(rate(local_llm_http_requests_total{{{http},status="429"}}[{r}])) / sum(rate({valid}[{r}]))')], 'percent',x=12,desc='Separate backend failures from explicit overload rejection. Zero traffic gives no percentage, not an artificial 100% success.')
-y+=8
 
-row('Latency, streaming, and reliability')
-panel('Successful request duration: p50 / p95 / p99',quantiles('local_llm_http_duration_seconds',http),'s',x=0,desc='Histogram estimates over the rate window. Low request volume limits percentile precision.')
-panel('First model token: p50 / p95 / p99',quantiles('local_llm_first_token_seconds',http),'s',x=12)
-y+=8
-panel('OpenLIT SDK duration: p50 / p95 / p99',quantiles('gen_ai_client_operation_duration_seconds',sdk),'s',x=0,desc='SDK streaming operation duration; compare with gateway latency for application overhead.')
-panel('Illustrative fast-success SLI (≤1 s)', [('success within 1 s',f'100 * sum(rate(local_llm_http_duration_seconds_bucket{{{http},le="1.0"}}[{r}])) / sum(rate({valid}[{r}]))')],'percent',x=12,desc='Successful valid requests completed within one second / all valid requests. One second is a lab threshold, not an agreed production SLO.')
-y+=8
-panel('Completion finish reasons', [('{{finish_reason}}',f'sum by(finish_reason) (rate(local_llm_completions_total{{{http}}}[{r}]))')],'reqps',x=0)
-panel('Output capped at max_tokens',f'100 * sum(rate(local_llm_completions_total{{{http},finish_reason="length"}}[{r}])) / sum(rate(local_llm_completions_total{{{http}}}[{r}]))','percent',x=12,desc='Length finish reason means generation reached its output limit. This is distinct from a context-window error.')
-y+=8
+row("Service health and traffic")
+panel(
+    "Model ready",
+    f"up{{{model}}}",
+    "short",
+    "stat",
+    0,
+    4,
+    4,
+    "Scrape/model availability, independent of whether traffic exists.",
+    [{"color": "red", "value": None}, {"color": "green", "value": 1}],
+)
+panel(
+    "Client ready",
+    f"up{{{http}}}",
+    "short",
+    "stat",
+    4,
+    4,
+    4,
+    "Metrics endpoint availability. Check replicas below for Kubernetes readiness.",
+    [{"color": "red", "value": None}, {"color": "green", "value": 1}],
+)
+panel(
+    "Requests / selected range",
+    f"sum(increase(local_llm_http_requests_total{{{http}}}[$__range]))",
+    "short",
+    "stat",
+    8,
+    4,
+    4,
+    (
+        "Counter increases over the selected window. Very first samples "
+        "may not have a preceding baseline."
+    ),
+)
+panel(
+    "Valid-request success / selected range",
+    (
+        f'100 * sum(increase(local_llm_http_requests_total{{{http},status="200"}}[$__range])'
+        f") / sum(increase({valid}[$__range]))"
+    ),
+    "percent",
+    "stat",
+    12,
+    4,
+    4,
+    (
+        "Valid statuses: 200, 429, 502, 504. Input-validation errors "
+        "are excluded. Idle windows have no success percentage."
+    ),
+)
+panel(
+    "P95 successful request duration",
+    quantiles("local_llm_http_duration_seconds", http)[1:2],
+    "s",
+    "stat",
+    16,
+    4,
+    4,
+    (
+        "Successful request processing through the gateway, including "
+        "server queueing. The HTTP response is buffered until complete."
+    ),
+)
+panel(
+    "P95 first model token",
+    quantiles("local_llm_first_token_seconds", http)[1:2],
+    "s",
+    "stat",
+    20,
+    4,
+    4,
+    (
+        "Gateway arrival to first nonempty model stream chunk; includes "
+        "queueing and prefill. This is not first-byte latency seen "
+        "by the HTTP caller."
+    ),
+)
+y += 4
+panel(
+    "HTTP requests by outcome",
+    [
+        (
+            "{{status}}",
+            f"sum by(status) (rate(local_llm_http_requests_total{{{http}}}[{r}]))",
+        )
+    ],
+    "reqps",
+    x=0,
+)
+panel(
+    "HTTP failure and admission-rejection rates",
+    [
+        (
+            "5xx / valid requests",
+            (
+                f'100 * sum(rate(local_llm_http_requests_total{{{http},status=~"502|504"}}[{r}])'
+                f") / sum(rate({valid}[{r}]))"
+            ),
+        ),
+        (
+            "429 / valid requests",
+            (
+                f'100 * sum(rate(local_llm_http_requests_total{{{http},status="429"}}[{r}])'
+                f") / sum(rate({valid}[{r}]))"
+            ),
+        ),
+    ],
+    "percent",
+    x=12,
+    desc=(
+        "Separate backend failures from explicit overload rejection. "
+        "Zero traffic gives no percentage, not an artificial 100% "
+        "success."
+    ),
+)
+y += 8
 
-row('Tokens and inference efficiency')
-panel('Input / output token rate',[('{{gen_ai_token_type}}',f'sum by(gen_ai_token_type) (rate(gen_ai_client_token_usage_sum{{{sdk}}}[{r}]))')],'suffix:tokens/s',x=0)
-panel('Tokens / selected range',[('{{gen_ai_token_type}}',f'sum by(gen_ai_token_type) (increase(gen_ai_client_token_usage_sum{{{sdk}}}[$__range]))')],'short','stat',12,12,8,'SDK-reported usage. Cached input tokens can differ from newly evaluated prompt tokens at the server.')
-y+=8
-panel('P95 tokens per request',[(kind,f'histogram_quantile(0.95,sum by(le) (rate(gen_ai_client_token_usage_bucket{{{sdk},gen_ai_token_type="{kind}"}}[{r}])))') for kind in ['input','output']],'short',x=0)
-panel('Prompt cache hit fraction',f'100 * sum(rate(llamacpp:prompt_tokens_cached_total{{{model}}}[{r}])) / (sum(rate(llamacpp:prompt_tokens_cached_total{{{model}}}[{r}])) + sum(rate(llamacpp:prompt_tokens_total{{{model}}}[{r}])))','percent',x=12,desc='Cached prompt tokens / (cached + newly evaluated prompt tokens). Native server counters, weighted over the rate window.')
-y+=8
-panel('Throughput while evaluating / decoding',[
- ('prefill',f'sum(rate(llamacpp:prompt_tokens_total{{{model}}}[{r}])) / sum(rate(llamacpp:prompt_seconds_total{{{model}}}[{r}]))'),
- ('decode',f'sum(rate(llamacpp:tokens_predicted_total{{{model}}}[{r}])) / sum(rate(llamacpp:tokens_predicted_seconds_total{{{model}}}[{r}]))')], 'suffix:tokens/s',x=0,desc='Tokens / CPU inference wall time. Excludes idle time; not equivalent to tokens per second delivered over the entire observation window.')
-panel('Mean decode time per output token',f'sum(rate(llamacpp:tokens_predicted_seconds_total{{{model}}}[{r}])) / sum(rate(llamacpp:tokens_predicted_total{{{model}}}[{r}]))','s',x=12,desc='Weighted server decode time / generated tokens, not a per-request latency percentile.')
-y+=8
+row("Latency, streaming, and reliability")
+panel(
+    "Successful request duration: p50 / p95 / p99",
+    quantiles("local_llm_http_duration_seconds", http),
+    "s",
+    x=0,
+    desc="Histogram estimates over the rate window. Low request volume limits percentile precision.",
+)
+panel(
+    "First model token: p50 / p95 / p99",
+    quantiles("local_llm_first_token_seconds", http),
+    "s",
+    x=12,
+)
+y += 8
+panel(
+    "OpenLIT SDK duration: p50 / p95 / p99",
+    quantiles("gen_ai_client_operation_duration_seconds", sdk),
+    "s",
+    x=0,
+    desc="SDK streaming operation duration; compare with gateway latency for application overhead.",
+)
+panel(
+    "Illustrative fast-success SLI (≤1 s)",
+    [
+        (
+            "success within 1 s",
+            (
+                f'100 * sum(rate(local_llm_http_duration_seconds_bucket{{{http},le="1.0"}}[{r}])'
+                f") / sum(rate({valid}[{r}]))"
+            ),
+        )
+    ],
+    "percent",
+    x=12,
+    desc=(
+        "Successful valid requests completed within one second / "
+        "all valid requests. One second is a lab threshold, not an "
+        "agreed production SLO."
+    ),
+)
+y += 8
+panel(
+    "Completion finish reasons",
+    [
+        (
+            "{{finish_reason}}",
+            f"sum by(finish_reason) (rate(local_llm_completions_total{{{http}}}[{r}]))",
+        )
+    ],
+    "reqps",
+    x=0,
+)
+panel(
+    "Output capped at max_tokens",
+    (
+        f'100 * sum(rate(local_llm_completions_total{{{http},finish_reason="length"}}[{r}])'
+        f") / sum(rate(local_llm_completions_total{{{http}}}[{r}])"
+        f")"
+    ),
+    "percent",
+    x=12,
+    desc=(
+        "Length finish reason means generation reached its output "
+        "limit. This is distinct from a context-window error."
+    ),
+)
+y += 8
 
-row('Saturation and resource pressure')
-panel('Admitted, active, and queued requests',[
- ('gateway admitted',f'local_llm_inflight_requests{{{http}}}'),('gateway capacity',f'local_llm_admission_capacity{{{http}}}'),
- ('server active',f'llamacpp:requests_processing{{{model}}}'),('server queue',f'llamacpp:requests_deferred{{{model}}}')],x=0,desc='One server slot, at most two admitted requests. Gauges sampled every 15 s may miss very short queue spikes; the 429 counter does not.')
-panel('Context length high-water mark / 512 tokens',f'100 * llamacpp:n_tokens_max{{{model}}} / 512','percent',x=12,desc='Highest sequence length seen since model start. This is not instantaneous KV-cache occupancy or current memory utilization.')
-y+=8
-panel('CPU usage / limits',[
- ('{{pod}} used',resource('container_cpu_usage_seconds_total',True)),('{{pod}} limit',limits('k8s_container_cpu_limit'))],'suffix:cores',x=0,desc='Kubelet cAdvisor pod-level CPU usage, with API-reported application-container limits. Uses the pod aggregate when available to avoid double counting.')
-panel('Working memory / limits',[
- ('{{pod}} used',resource('container_memory_working_set_bytes')),('{{pod}} limit',limits('k8s_container_memory_limit_bytes'))],'bytes',x=12)
-y+=8
-panel('CPU throttled periods',f'100 * {resource("container_cpu_cfs_throttled_periods_total",True)} / {resource("container_cpu_cfs_periods_total",True)}','percent',x=0,desc='Throttled CFS periods / elapsed CFS periods by pod. An idle denominator yields no percentage.')
-panel('OOM events and container restarts',[
- ('{{pod}} OOM events',resource('container_oom_events_total')),
- ('{{k8s_pod_name}} restarts',f'sum by(k8s_pod_name) (k8s_container_restarts{{{k8s}}})')],x=12,desc='Current cumulative counts. Kubernetes restart gauges can reset when pods are replaced; do not apply counter rate() semantics.')
-y+=8
-panel('Deployment desired / available replicas',[
- ('{{k8s_deployment_name}} desired','k8s_deployment_desired{k8s_deployment_name=~"smollm-(model|client)"}'),
- ('{{k8s_deployment_name}} available','k8s_deployment_available{k8s_deployment_name=~"smollm-(model|client)"}')],x=0)
-panel('Container readiness',[('{{k8s_pod_name}}',f'k8s_container_ready{{{k8s}}}')],kind='stat',x=12,w=12,h=8,desc='Kubernetes readiness from the existing Collector. Missing data is not treated as ready.')
-y+=8
+row("Tokens and inference efficiency")
+panel(
+    "Input / output token rate",
+    [
+        (
+            "{{gen_ai_token_type}}",
+            f"sum by(gen_ai_token_type) (rate(gen_ai_client_token_usage_sum{{{sdk}}}[{r}]))",
+        )
+    ],
+    "suffix:tokens/s",
+    x=0,
+)
+panel(
+    "Tokens / selected range",
+    [
+        (
+            "{{gen_ai_token_type}}",
+            (
+                f"sum by(gen_ai_token_type) (increase(gen_ai_client_token_usage_sum{{{sdk}}}[$__range])"
+                f")"
+            ),
+        )
+    ],
+    "short",
+    "stat",
+    12,
+    12,
+    8,
+    (
+        "SDK-reported usage. Cached input tokens can differ from "
+        "newly evaluated prompt tokens at the server."
+    ),
+)
+y += 8
+panel(
+    "P95 tokens per request",
+    [
+        (
+            kind,
+            (
+                f'histogram_quantile(0.95,sum by(le) (rate(gen_ai_client_token_usage_bucket{{{sdk},gen_ai_token_type="{kind}"}}[{r}])'
+                f"))"
+            ),
+        )
+        for kind in ["input", "output"]
+    ],
+    "short",
+    x=0,
+)
+panel(
+    "Prompt cache hit fraction",
+    (
+        f"100 * sum(rate(llamacpp:prompt_tokens_cached_total{{{model}}}[{r}])"
+        f") / (sum(rate(llamacpp:prompt_tokens_cached_total{{{model}}}[{r}])"
+        f") + sum(rate(llamacpp:prompt_tokens_total{{{model}}}[{r}])"
+        f"))"
+    ),
+    "percent",
+    x=12,
+    desc=(
+        "Cached prompt tokens / (cached + newly evaluated prompt "
+        "tokens). Native server counters, weighted over the rate "
+        "window."
+    ),
+)
+y += 8
+panel(
+    "Throughput while evaluating / decoding",
+    [
+        (
+            "prefill",
+            (
+                f"sum(rate(llamacpp:prompt_tokens_total{{{model}}}[{r}])"
+                f") / sum(rate(llamacpp:prompt_seconds_total{{{model}}}[{r}])"
+                f")"
+            ),
+        ),
+        (
+            "decode",
+            (
+                f"sum(rate(llamacpp:tokens_predicted_total{{{model}}}[{r}])"
+                f") / sum(rate(llamacpp:tokens_predicted_seconds_total{{{model}}}[{r}])"
+                f")"
+            ),
+        ),
+    ],
+    "suffix:tokens/s",
+    x=0,
+    desc=(
+        "Tokens / CPU inference wall time. Excludes idle time; not "
+        "equivalent to tokens per second delivered over the entire "
+        "observation window."
+    ),
+)
+panel(
+    "Mean decode time per output token",
+    (
+        f"sum(rate(llamacpp:tokens_predicted_seconds_total{{{model}}}[{r}])"
+        f") / sum(rate(llamacpp:tokens_predicted_total{{{model}}}[{r}])"
+        f")"
+    ),
+    "s",
+    x=12,
+    desc="Weighted server decode time / generated tokens, not a per-request latency percentile.",
+)
+y += 8
 
-row('Telemetry health and trace drill-down')
-panel('Scrape health', [('{{job}}','up{job=~"smollm-model|smollm-client|openlit|collector-internal|kubelet-cadvisor|tempo"}')],kind='stat',x=0,w=24,h=4,desc='Read each target separately. A down metrics pipeline can make business panels empty even while inference still works.')
-y+=4
-panel('Collector accepted telemetry',[
- ('spans / s','sum(rate(otelcol_receiver_accepted_spans{receiver="otlp"}[$__rate_interval]))'),
- ('metric points / s','sum(rate(otelcol_receiver_accepted_metric_points{receiver="otlp"}[$__rate_interval]))')],x=0)
-panel('Collector refused or failed trace delivery',[
- ('refused spans / s','sum(rate(otelcol_receiver_refused_spans{receiver="otlp"}[$__rate_interval]))'),
- ('failed sends / s','sum(rate(otelcol_exporter_send_failed_spans{exporter="otlp/tempo"}[$__rate_interval]))'),
- ('enqueue failures / s','sum(rate(otelcol_exporter_enqueue_failed_spans{exporter="otlp/tempo"}[$__rate_interval]))')],x=12,desc='Failure counters may be absent until the first failure. Use scrape health and queue gauges to distinguish uninitialized counters from a missing Collector.')
-y+=8
-panel('Trace exporter queue / capacity',[
- ('queued batches','otelcol_exporter_queue_size{exporter="otlp/tempo"}'),('capacity','otelcol_exporter_queue_capacity{exporter="otlp/tempo"}')],x=0)
-panel('Tempo spans received', 'sum(rate(tempo_distributor_spans_received_total[$__rate_interval]))','suffix:spans/s',x=12)
-y+=8
-panels.append({'id':next_id,'title':'Successful and failed inference traces','type':'table','datasource':{'type':'tempo','uid':'ai-tempo'},'gridPos':{'x':0,'y':y,'w':24,'h':9},'targets':[{'refId':'A','queryType':'traceql','query':'{ resource.service.name = "smollm-client" }','limit':20,'tableType':'traces'}],'options':{'showHeader':True},'fieldConfig':{'defaults':{},'overrides':[]}});next_id+=1;y+=9
-panels.append({'id':next_id,'title':'Interpretation and measurement limits','type':'text','gridPos':{'x':0,'y':y,'w':24,'h':5},'options':{'mode':'markdown','content':'Only real local-model traffic is selected. **Idle periods:** no percentile/ratio sample is expected when there are no requests. **TTFT:** first model content chunk at the gateway; HTTP replies are buffered. **Context:** high-water mark, not live KV occupancy. **Limits:** semantic quality, correctness, electricity cost, and true live KV occupancy are not measured. No GPU is allocated and no provider invoice exists. Trace drill-down preserves model and token attributes. Thresholds are lab examples; agree SLOs and workload-specific limits before treating them as production objectives.'}})
-j={'uid':'smollm-local','title':'Local LLM / Platform Operations','schemaVersion':39,'version':2,'refresh':'15s','time':{'from':'now-30m','to':'now'},'tags':['llm','platform','openlit'],'panels':panels,'templating':{'list':[]}}
-resource={'apiVersion':'grafana.integreatly.org/v1beta1','kind':'GrafanaDashboard','metadata':{'name':'smollm-local','namespace':'grafana'},'spec':{'instanceSelector':{'matchLabels':{'dashboards':'grafana'}},'folder':'AI Observability','json':json.dumps(j)}}
-root.joinpath('dashboard.json').write_text(json.dumps(resource,indent=2)+'\n')
-root.joinpath('dashboard-definition.json').write_text(json.dumps(j,indent=2)+'\n')
-print(f'{len(panels)} panels including rows and notes')
+row("Saturation and resource pressure")
+panel(
+    "Admitted, active, and queued requests",
+    [
+        ("gateway admitted", f"local_llm_inflight_requests{{{http}}}"),
+        ("gateway capacity", f"local_llm_admission_capacity{{{http}}}"),
+        ("server active", f"llamacpp:requests_processing{{{model}}}"),
+        ("server queue", f"llamacpp:requests_deferred{{{model}}}"),
+    ],
+    x=0,
+    desc=(
+        "One server slot, at most two admitted requests. Gauges sampled "
+        "every 15 s may miss very short queue spikes; the 429 counter "
+        "does not."
+    ),
+)
+panel(
+    "Context length high-water mark / 512 tokens",
+    f"100 * llamacpp:n_tokens_max{{{model}}} / 512",
+    "percent",
+    x=12,
+    desc=(
+        "Highest sequence length seen since model start. This is "
+        "not instantaneous KV-cache occupancy or current memory utilization."
+    ),
+)
+y += 8
+panel(
+    "CPU usage / limits",
+    [
+        ("{{pod}} used", resource("container_cpu_usage_seconds_total", True)),
+        ("{{pod}} limit", limits("k8s_container_cpu_limit")),
+    ],
+    "suffix:cores",
+    x=0,
+    desc=(
+        "Kubelet cAdvisor pod-level CPU usage, with API-reported "
+        "application-container limits. Uses the pod aggregate when "
+        "available to avoid double counting."
+    ),
+)
+panel(
+    "Working memory / limits",
+    [
+        ("{{pod}} used", resource("container_memory_working_set_bytes")),
+        ("{{pod}} limit", limits("k8s_container_memory_limit_bytes")),
+    ],
+    "bytes",
+    x=12,
+)
+y += 8
+panel(
+    "CPU throttled periods",
+    (
+        f'100 * {resource("container_cpu_cfs_throttled_periods_total",True)} '
+        f'/ {resource("container_cpu_cfs_periods_total",True)}'
+    ),
+    "percent",
+    x=0,
+    desc="Throttled CFS periods / elapsed CFS periods by pod. An idle denominator yields no percentage.",
+)
+panel(
+    "OOM events and container restarts",
+    [
+        ("{{pod}} OOM events", resource("container_oom_events_total")),
+        (
+            "{{k8s_pod_name}} restarts",
+            f"sum by(k8s_pod_name) (k8s_container_restarts{{{k8s}}})",
+        ),
+    ],
+    x=12,
+    desc=(
+        "Current cumulative counts. Kubernetes restart gauges can "
+        "reset when pods are replaced; do not apply counter rate() "
+        "semantics."
+    ),
+)
+y += 8
+panel(
+    "Deployment desired / available replicas",
+    [
+        (
+            "{{k8s_deployment_name}} desired",
+            'k8s_deployment_desired{k8s_deployment_name=~"smollm-(model|client)"}',
+        ),
+        (
+            "{{k8s_deployment_name}} available",
+            'k8s_deployment_available{k8s_deployment_name=~"smollm-(model|client)"}',
+        ),
+    ],
+    x=0,
+)
+panel(
+    "Container readiness",
+    [("{{k8s_pod_name}}", f"k8s_container_ready{{{k8s}}}")],
+    kind="stat",
+    x=12,
+    w=12,
+    h=8,
+    desc="Kubernetes readiness from the existing Collector. Missing data is not treated as ready.",
+)
+y += 8
+
+row("Telemetry health and trace drill-down")
+panel(
+    "Scrape health",
+    [
+        (
+            "{{job}}",
+            'up{job=~"smollm-model|smollm-client|openlit|collector-internal|kubelet-cadvisor|tempo"}',
+        )
+    ],
+    kind="stat",
+    x=0,
+    w=24,
+    h=4,
+    desc=(
+        "Read each target separately. A down metrics pipeline can "
+        "make business panels empty even while inference still works."
+    ),
+)
+y += 4
+panel(
+    "Collector accepted telemetry",
+    [
+        (
+            "spans / s",
+            'sum(rate(otelcol_receiver_accepted_spans{receiver="otlp"}[$__rate_interval]))',
+        ),
+        (
+            "metric points / s",
+            'sum(rate(otelcol_receiver_accepted_metric_points{receiver="otlp"}[$__rate_interval]))',
+        ),
+    ],
+    x=0,
+)
+panel(
+    "Collector refused or failed trace delivery",
+    [
+        (
+            "refused spans / s",
+            'sum(rate(otelcol_receiver_refused_spans{receiver="otlp"}[$__rate_interval]))',
+        ),
+        (
+            "failed sends / s",
+            'sum(rate(otelcol_exporter_send_failed_spans{exporter="otlp/tempo"}[$__rate_interval]))',
+        ),
+        (
+            "enqueue failures / s",
+            'sum(rate(otelcol_exporter_enqueue_failed_spans{exporter="otlp/tempo"}[$__rate_interval]))',
+        ),
+    ],
+    x=12,
+    desc=(
+        "Failure counters may be absent until the first failure. "
+        "Use scrape health and queue gauges to distinguish uninitialized "
+        "counters from a missing Collector."
+    ),
+)
+y += 8
+panel(
+    "Trace exporter queue / capacity",
+    [
+        ("queued batches", 'otelcol_exporter_queue_size{exporter="otlp/tempo"}'),
+        ("capacity", 'otelcol_exporter_queue_capacity{exporter="otlp/tempo"}'),
+    ],
+    x=0,
+)
+panel(
+    "Tempo spans received",
+    "sum(rate(tempo_distributor_spans_received_total[$__rate_interval]))",
+    "suffix:spans/s",
+    x=12,
+)
+y += 8
+panels.append(
+    {
+        "id": next_id,
+        "title": "Successful and failed inference traces",
+        "type": "table",
+        "datasource": {"type": "tempo", "uid": "ai-tempo"},
+        "gridPos": {"x": 0, "y": y, "w": 24, "h": 9},
+        "targets": [
+            {
+                "refId": "A",
+                "queryType": "traceql",
+                "query": '{ resource.service.name = "smollm-client" }',
+                "limit": 20,
+                "tableType": "traces",
+            }
+        ],
+        "options": {"showHeader": True},
+        "fieldConfig": {"defaults": {}, "overrides": []},
+    }
+)
+next_id += 1
+y += 9
+panels.append(
+    {
+        "id": next_id,
+        "title": "Interpretation and measurement limits",
+        "type": "text",
+        "gridPos": {"x": 0, "y": y, "w": 24, "h": 5},
+        "options": {
+            "mode": "markdown",
+            "content": (
+                "Only real local-model traffic is selected. **Idle periods:** "
+                "no percentile/ratio sample is expected when there are no "
+                "requests. **TTFT:** first model content chunk at the gateway; "
+                "HTTP replies are buffered. **Context:** high-water mark,"
+                " not live KV occupancy. **Limits:** semantic quality, correctness,"
+                " electricity cost, and true live KV occupancy are not measured. "
+                "No GPU is allocated and no provider invoice exists. Trace "
+                "drill-down preserves model and token attributes. Thresholds "
+                "are lab examples; agree SLOs and workload-specific limits "
+                "before treating them as production objectives."
+            ),
+        },
+    }
+)
+j = {
+    "uid": "smollm-local",
+    "title": "Local LLM / Platform Operations",
+    "schemaVersion": 39,
+    "version": 2,
+    "refresh": "15s",
+    "time": {"from": "now-30m", "to": "now"},
+    "tags": ["llm", "platform", "openlit"],
+    "panels": panels,
+    "templating": {"list": []},
+}
+resource = {
+    "apiVersion": "grafana.integreatly.org/v1beta1",
+    "kind": "GrafanaDashboard",
+    "metadata": {"name": "smollm-local", "namespace": "grafana"},
+    "spec": {
+        "instanceSelector": {"matchLabels": {"dashboards": "grafana"}},
+        "folder": "AI Observability",
+        "json": json.dumps(j),
+    },
+}
+root.joinpath("dashboard.json").write_text(json.dumps(resource, indent=2) + "\n")
+root.joinpath("dashboard-definition.json").write_text(json.dumps(j, indent=2) + "\n")
+print(f"{len(panels)} panels including rows and notes")
 ```
 
 ```bash
@@ -867,9 +1805,15 @@ kubectl --context "$CLUSTER" -n ai-observability port-forward svc/smollm-client 
 Send real requests from another terminal. No provider API key or account is needed.
 
 ```bash
-curl --fail --silent --show-error http://localhost:8080/chat   -H 'Content-Type: application/json'   -d '{"prompt":"Say hello in three words."}' | python3 -m json.tool
+curl --fail --silent --show-error http://localhost:8080/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt":"Say hello in three words."}' \
+  | python3 -m json.tool
 
-curl --fail --silent --show-error http://localhost:8080/chat   -H 'Content-Type: application/json'   -d '{"prompt":"Explain a Kubernetes pod in one sentence.","max_tokens":1}'   | python3 -m json.tool
+curl --fail --silent --show-error http://localhost:8080/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt":"Explain a Kubernetes pod in one sentence.","max_tokens":1}' \
+  | python3 -m json.tool
 ```
 
 The second request intentionally exercises the output limit with a real inference call: `finish_reason` should be `length`. The response includes actual token usage, `first_token_seconds`, and total processing duration. A very small model is sufficient to validate telemetry, even though response quality is limited.
@@ -899,11 +1843,17 @@ kubectl --context "$CLUSTER" -n ai-observability port-forward svc/prometheus 909
 ```
 
 ```bash
-curl -fsS -G http://localhost:9090/api/v1/query   --data-urlencode 'query=sum(gen_ai_client_token_usage_sum{service_name="smollm-client"})'   | python3 -m json.tool
+curl -fsS -G http://localhost:9090/api/v1/query \
+  --data-urlencode 'query=sum(gen_ai_client_token_usage_sum{service_name="smollm-client"})' \
+  | python3 -m json.tool
 
-curl -fsS -G http://localhost:9090/api/v1/query   --data-urlencode 'query=local_llm_first_token_seconds_count' | python3 -m json.tool
+curl -fsS -G http://localhost:9090/api/v1/query \
+  --data-urlencode 'query=local_llm_first_token_seconds_count' \
+  | python3 -m json.tool
 
-curl -fsS -G http://localhost:9090/api/v1/query   --data-urlencode 'query=up{job=~"smollm-client|smollm-model|openlit|collector-internal|kubelet-cadvisor|tempo"}'   | python3 -m json.tool
+curl -fsS -G http://localhost:9090/api/v1/query \
+  --data-urlencode 'query=up{job=~"smollm-client|smollm-model|openlit|collector-internal|kubelet-cadvisor|tempo"}' \
+  | python3 -m json.tool
 ```
 
 Each scrape-health target should be 1. Kubernetes metric identities vary between versions; the resource queries prefer the cAdvisor pod aggregate where it exists and fall back to container sums, avoiding double counting. Container limit/restart/readiness metrics come from the API through the Collector. Old pod series can linger briefly after a rollout until metric expiry.
@@ -934,14 +1884,20 @@ Save the following as `verify-burst.py`:
 ```python
 import concurrent.futures, json, urllib.request, urllib.error
 
+
 def call(_):
-    body = json.dumps({"prompt": "Write a short explanation of containers.", "max_tokens": 64}).encode()
-    request = urllib.request.Request("http://localhost:8080/chat", body, {"Content-Type": "application/json"})
+    body = json.dumps(
+        {"prompt": "Write a short explanation of containers.", "max_tokens": 64}
+    ).encode()
+    request = urllib.request.Request(
+        "http://localhost:8080/chat", body, {"Content-Type": "application/json"}
+    )
     try:
         with urllib.request.urlopen(request, timeout=90) as response:
             return response.status
     except urllib.error.HTTPError as error:
         return error.code
+
 
 with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
     print(list(pool.map(call, range(12))))
