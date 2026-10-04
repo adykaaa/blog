@@ -478,13 +478,10 @@ img { max-width: 100%; height: auto; display: block; }
   box-shadow: none;
 }
 
-/* Long runbooks keep prose readable while giving source code room. */
-.content-wrap:has(.runbook) {
-  max-width: 1120px;
-}
+/* Runbooks use the same column width for prose and code. */
 .runbook .post-header,
 .runbook .post-footer,
-.runbook .post-content > :not(.highlight):not(pre):not(table) {
+.runbook .post-content > * {
   max-width: var(--max-w);
   margin-left: auto;
   margin-right: auto;
