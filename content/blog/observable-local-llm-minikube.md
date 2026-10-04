@@ -195,8 +195,9 @@ Expected: `grafana-pvc` is Bound and Grafana is ready. This provisions persisten
 
 The complete generator below creates all configurations, PVCs, Services, Deployments, and RBAC. It uses only Python's standard library. Configuration hashes cause the relevant pod to restart when its configuration changes. The Collector's Kubernetes API access is read-only and scoped to the application namespace. Prometheus discovers node names automatically, authenticates with its ServiceAccount, and verifies the API server's certificate.
 
-```bash
-python3 - <<'PY'
+Save the following as `build-stack.py`:
+
+```python
 import hashlib
 import json
 from pathlib import Path
@@ -363,7 +364,10 @@ items += [
 ]
 (root/'stack.json').write_text(json.dumps({'apiVersion':'v1','kind':'List','items':items},indent=2)+'\n')
 print(images)
-PY
+```
+
+```bash
+python3 build-stack.py
 k apply -f stack.json
 for component in prometheus tempo otel-collector; do
   k -n ai-observability rollout status deployment/"$component" --timeout=300s
@@ -421,8 +425,9 @@ This gateway uses an OpenAI-compatible SDK against the local model server. Its a
 
 At most two requests are admitted against one inference slot. Extra requests receive HTTP 429 rather than creating an unbounded inference queue. Responses use up to 64 generated tokens. The gateway consumes the model stream internally to measure arrival-to-first-content latency, then returns a buffered JSON response. Its TTFT therefore measures model streaming at the gateway, not HTTP time-to-first-byte experienced by the caller.
 
-```bash
-cat > app.py <<'PY'
+Save the following as `app.py`:
+
+```python
 """Local LLM gateway with bounded admission and low-cardinality Prometheus metrics."""
 import json
 import os
@@ -555,7 +560,6 @@ class Handler(BaseHTTPRequestHandler):
             pass
 
 ThreadingHTTPServer(('0.0.0.0', 8080), Handler).serve_forever()
-PY
 ```
 
 ```bash
@@ -572,8 +576,9 @@ minikube -p "$CLUSTER" image build . -t local/smollm-client:1
 
 The next code block contains the complete model and client deployment definitions. The model is a real 135M-parameter SmolLM2 Instruct Q4_K_M GGUF, approximately 105 MB. Its init container downloads a pinned blob, verifies SHA-256, and atomically renames it. Subsequent starts verify and reuse the PVC copy. The server runs CPU-only with two threads, one slot, and a 512-token context.
 
-```bash
-python3 - <<'PY'
+Save the following as `build-manifest.py`:
+
+```python
 import hashlib,json
 from pathlib import Path
 root=Path(".")
@@ -596,7 +601,10 @@ items.append({'apiVersion':'apps/v1','kind':'Deployment','metadata':meta('smollm
 for name in ['smollm-model','smollm-client']:
  items.append({'apiVersion':'v1','kind':'Service','metadata':meta(name),'spec':{'selector':{'app':name},'ports':[{'name':'http','port':8080,'targetPort':8080}]}})
 root.joinpath('deployment.json').write_text(json.dumps({'apiVersion':'v1','kind':'List','items':items},indent=2)+'\n')
-PY
+```
+
+```bash
+python3 build-manifest.py
 k apply -f deployment.json
 k -n ai-observability rollout status deployment/smollm-model --timeout=300s
 k -n ai-observability rollout status deployment/smollm-client --timeout=180s
@@ -703,8 +711,9 @@ Coverage:
 
 No artificial dollar-cost, GPU, semantic quality, or live KV-occupancy panels are shown. Those measurements are unavailable/not applicable to this CPU-only lab. The context signal is explicitly a high-water mark. The one-second latency threshold is illustrative, not an agreed production SLO.
 
-```bash
-python3 - <<'PY'
+Save the following as `build-dashboard.py`:
+
+```python
 """Generate one Grafana dashboard; every PromQL query uses an emitted metric."""
 import json
 from pathlib import Path
@@ -826,17 +835,12 @@ resource={'apiVersion':'grafana.integreatly.org/v1beta1','kind':'GrafanaDashboar
 root.joinpath('dashboard.json').write_text(json.dumps(resource,indent=2)+'\n')
 root.joinpath('dashboard-definition.json').write_text(json.dumps(j,indent=2)+'\n')
 print(f'{len(panels)} panels including rows and notes')
-PY
-k apply -f dashboard.json
 ```
-
-If this is the earlier two-dashboard lab, consolidate it after provisioning the new dashboard:
 
 ```bash
-k -n grafana delete grafanadashboard openlit-genai --ignore-not-found
+python3 build-dashboard.py
+k apply -f dashboard.json
 ```
-
-Fresh installations do not create that older dashboard. The Grafana Operator reconciles the one `smollm-local` resource and deletes its managed older dashboard when the old resource is removed.
 
 ## 9. Access Grafana and the gateway
 
@@ -925,8 +929,9 @@ curl -sS -o /dev/null -w 'HTTP %{http_code}
 
 Optionally issue a small finite burst of real requests to exercise rejection and queueing. This is a bounded verification, not continuous traffic generation:
 
-```bash
-python3 - <<'PY'
+Save the following as `verify-burst.py`:
+
+```python
 import concurrent.futures, json, urllib.request, urllib.error
 
 def call(_):
@@ -940,7 +945,10 @@ def call(_):
 
 with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
     print(list(pool.map(call, range(12))))
-PY
+```
+
+```bash
+python3 verify-burst.py
 ```
 
 Expect successful calls and possibly 429 responses depending on overlap. The rejection counter retains short spikes that a 15-second gauge scrape may miss. Idle gauges/rates should settle when requests stop.
