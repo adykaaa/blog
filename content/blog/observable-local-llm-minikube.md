@@ -2026,6 +2026,10 @@ kubectl --context "$CLUSTER" -n ai-observability logs deployment/tempo --tail=50
 
 The dashboard's percentiles depend on histogram bucket resolution and sample volume. Its ratios intentionally remain undefined at zero traffic. Restart gauges should not be treated as monotonic counters. Model context high-water mark is not live KV usage. Semantic correctness, evaluation scores, electricity costs, and true live KV-cache occupancy need additional measurement; they are not inferred from latency or tokens.
 
+## Conclusion
+
+We now have a real LLM running on a local CPU, with metrics and traces staying on the same minikube cluster. I can see how long requests take, how quickly tokens arrive, where requests queue up, and how much CPU and memory the model uses. When something slows down, there’s enough detail to investigate it and compare what happens after changing a limit or sending more traffic. The model is tiny and this won’t tell me whether its answers are any good, but it gives me a useful local lab for learning how inference behaves under load, without a GPU or a provider account.
+
 ## References
 
 - [Grafana zero-code AI observability architecture](https://grafana.com/blog/ai-observability-zero-code/)
@@ -2035,4 +2039,3 @@ The dashboard's percentiles depend on histogram bucket resolution and sample vol
 - [llama.cpp server metrics and API](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md)
 - [Collector internal telemetry](https://opentelemetry.io/docs/collector/internal-telemetry/)
 - [Collector Kubernetes cluster receiver](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.161.0/receiver/k8sclusterreceiver)
-
