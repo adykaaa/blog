@@ -18,8 +18,8 @@ The answer is simple: **this is not going to stay like this for long**. If you a
 3. **Stage 3:** Our whole company is an AI-first company now (which is super unique because every other company is an AI first company now, these two letters are attracting VC money like blood attracts sharks).
 4. **Stage 4:** We are counting how many tokens you are using and we'll make it part of your performance evaluation! (ffs...)
 5. **Stage 5:** Well... this is costing us a lot of money (since Anthropic realized its monopoly situation, it started raising its prices like craaazy), so please use it carefully: only use higher-tier models if necessary, and use the dumber models for everything else.
-6. **Stage 6:** f\*\*k me, this is really expensive; we are limiting everyone to X dollars per month (where X gets spent in a week)!
-7. **Stage 7:** Couldn't we just host it ourselves using open-source models and "only pay for the infra" (because screw operational costs)?
+6. **Stage 6:** OMG, this is really expensive, we are limiting everyone to X dollars per month (where X gets spent in a week)!
+7. **Stage 7:** Couldn't we just host it ourselves using open-source models and "only pay for the infra"?
 
 Stage 7 might have to wait a bit for a few companies -- but I have a really strong hunch that this is going to be the case for most, and we want to be ready. This series is intended to cover my understanding of the current landscape and to solidify some of what I've learned. The thing that's hard about this in general is the fact that as platform engineers, we have to understand **so much stuff**, and now there's a whole new area we need to dig into. Remember how long it took us to be comfortable with K8s? Now your HTTPRoute setup for your Gateway API implementation is useless, your HPA scaling based on memory/CPU utilization can be thrown out of the window, you'll come across new K8s terminology like _LeaderWorkerSet_ and _DisaggregatedSet_, traditional service meshes won't help you, and all the metrics you thought were important won't matter that much anymore. TL;DR: a fun journey lies ahead!
 
@@ -52,7 +52,7 @@ LLM stands for Large Language **Model** so it would be great to understand what 
 
 [HuggingFace](https://huggingface.co) in essence is the **GitHub for models**. Here you can browse more than 2 million open-source models, as well as datasets for training models. It's best to get familiar with this website, as later on in our actual tutorials we'll use HuggingFace to download the LLM we are going to be experimenting with (also HF seems to be the industry standard for storing models as of writing this article).
 
-#### Let's see inside a model
+#### Inside the model file
 
 Let's look at the files for [SmolLM2 with 135 million parameters](https://huggingface.co/HuggingFaceTB/SmolLM2-135M/tree/main) (we could look at any other model, I chose this one for an example). As we can see there are a few configuration files, and one bigger file called **model.safetensors**:
 
@@ -103,11 +103,11 @@ If you expected to see a lot of interesting stuff inside the model code, now you
 
 ![Overly-simplified way of looking at models](/blog/images/llm-platform-engineering-overview/simplified-overview-model.png)
 
-**Takeaway**: A model is nothing but a **file** which contains a bunch of numbers in N-dimensional arrays. These numbers were learned via model training, and are applied to your input to produce the correct output. We use HuggingFace for storing, distributing and downloading models, and these models are stored in \*.safetensors files.
+**Takeaway**: A model is nothing but a **file** which contains a bunch of numbers in N-dimensional arrays. These numbers were learned via model training, and are applied to your input to produce the correct output. We use HuggingFace for storing, distributing and downloading models (we can also store these locally in _PersistentVolumes_ or in cloud object stores), and these models use the .safetensors extension.
 
 ### LLM high-level overview
 
-Now that we know that GPUs are used to run LLMs and we know that a model is nothing but a bunch of learned numbers, it's time to look at the high level flow of an LLM and focus-in on the important parts that we'll care about later:
+Now that we know why GPUs are used to run LLMs and we know that a model is nothing but a bunch of learned numbers, it's time to look at the high level flow of an LLM and focus-in on the important parts that we'll care about later:
 
 ![LLM high level architecture](/blog/images/llm-platform-engineering-overview/llm-overview.png)
 
