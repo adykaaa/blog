@@ -24,6 +24,9 @@ buildFuture = true
     weight = 20
 
 [markup]
+  [markup.tableOfContents]
+    startLevel = 2
+    endLevel = 4
   [markup.highlight]
     style = "dracula"
     lineNos = false

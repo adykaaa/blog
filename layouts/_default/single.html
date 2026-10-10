@@ -18,6 +18,15 @@
     {{ end }}
   </header>
 
+  {{ if .Params.toc }}
+  {{ if .Fragments.Headings }}
+  <aside class="post-toc" aria-labelledby="post-toc-title">
+    <h2 id="post-toc-title">Table of contents</h2>
+    {{ .TableOfContents }}
+  </aside>
+  {{ end }}
+  {{ end }}
+
   <div class="post-content">
     {{ .Content }}
   </div>

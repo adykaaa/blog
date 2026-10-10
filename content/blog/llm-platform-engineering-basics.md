@@ -5,6 +5,7 @@ description: "The first part of my LLM Inference Platform Engineering series, pr
 tags: ["Kubernetes", "AI", "GPU", "LLM"]
 draft: false
 wideCode: true
+toc: true
 ---
 
 LLM Inference Platform Engineering is an area that is becoming increasingly popular due to the widespread use of LLMs everywhere. If we think about it, it makes perfect sense: you are not writing code by hand anymore, are you? :)
@@ -60,7 +61,7 @@ Let's look at the files for [SmolLM2 with 135 million parameters](https://huggin
 when we talk about **the model** this is the file we are mostly referencing. _safetensors_ is a new simple format for storing tensors safely. A **tensor** essentially is a multidimensional array of numbers which are used by LLMs to store things like model weights, token embeddings, activation values, etc for matrix operations (so many complex words to understand... but we'll get there).
 Unlike formats based on Python [pickle](https://docs.python.org/3/library/pickle.html) which was used in the past to store models, it does not allow arbitrary code execution when loading model weights making it safer for sharing and downloading models. It's also designed to be suuuuper fast.
 
-To see inside the **model**, let's install the _safetensors_ Python module:
+To see inside the **model**, let's install the _safetensors_ Python module and the _torch_ module:
 
 ```bash
 pip install safetensors torch

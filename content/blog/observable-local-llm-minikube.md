@@ -5,6 +5,7 @@ description: "A complete CPU-only local LLM runbook with OpenLIT, Prometheus, Te
 tags: ["Kubernetes", "AI", "Observability", "Grafana"]
 draft: false
 wideCode: true
+toc: true
 ---
 
 I wanted to see what a local LLM was doing without building a large observability platform around it. The result is a small CPU-only model on minikube, OpenLIT instrumentation, Prometheus and Tempo, and one Grafana dashboard focused on the questions I care about as a platform engineer: is it available, how long do requests take, where does capacity run out, and can I follow an individual inference request?
