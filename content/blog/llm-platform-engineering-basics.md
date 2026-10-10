@@ -1,7 +1,7 @@
 ---
 title: "LLM Inference Platform Engineering - Part 1 - Overview"
 date: 2026-10-10T18:00:00+02:00
-description: "The first part of my LLM Inference Platform Engineering series, providing a high-level overview of the basics."
+description: "The first part of my LLM Inference Platform Engineering series, providing a high-level overview."
 tags: ["Kubernetes", "AI", "GPU", "LLM"]
 draft: false
 wideCode: true
@@ -38,15 +38,13 @@ Another issue is **bandwidth**: high-end server CPUs are capable of moving a _fe
 
 LLMs need to execute a **huge number of matrix operations** because nearly every major step in a **transformer** (where these matrix calculations take place) is built from linear algebra (bleh). Each token is represented as a **vector** of numbers, and the LLM repeatedly multiplies these vectors by large weight matrices. Since this happens across many tokens, many layers, and billions of learned parameters, a single generated token can require an enormous number of multiply-and-accumulate operations. These operations are not complex, but they happen billions of times over and over, which makes GPUs much better suited to this work because of their architecture.
 
-![High-level architecture of traditional LLMs](/blog/images/llm-platform-engineering-overview/llm-overview.png)
-
 It is also worth mentioning that there are models that can be run on CPUs (for example SmolLM) because their parameter counts are small enough that the amount of computation and memory movement stays manageable on a CPU. In general, **the number of parameters is strongly correlated with how much compute power is needed: more parameters mean more weights must be loaded and more multiply-accumulate operations must be performed for each token**, so larger models require much more memory bandwidth and processing throughput. SmolLM has a version that has only 135 million parameters, whereas something like Llama 3.1 405B has **405 billion parameters** -- good luck running that on your gaming CPU!
 
 **Takeaway**: GPUs are much more suited architecturally on the hardware level for the matrix operations that are needed for LLMs to calculate, so you'll be using them.
 
 ### The model
 
-In the previous paragraph about GPUs we have touched on a few keywords: models, parameters, vectors, transformers, and the high-level architectural overview of LLMs contain keywords like prefill, decode, tokenization, etc. Don't worry about these for now, we'll understand them later just enough so that we'll get a high level overview _enough for platform engineers_.
+In the previous paragraph about GPUs we have touched on a few keywords: models, parameters, vectors, transformers, etc. Don't worry about these for now, we'll understand them later just enough so that we'll get a high level overview _enough for platform engineers_.
 
 LLM stands for Large Language **Model** so it would be great to understand what a **model** actually is -- for that let's see one. Spoiler alert: it's a big file with a bunch of boring N-dimensional arrays.
 
@@ -105,4 +103,14 @@ If you expected to see a lot of interesting stuff inside the model code, now you
 
 ![Overly-simplified way of looking at models](/blog/images/llm-platform-engineering-overview/simplified-overview-model.png)
 
-**Takeaway**: A model is nothing but a **file** which contains a bunch of numbers in N-dimensional arrays. These numbers were learned via model training, and are applied to your input to produce the correct output. We use HuggingFace for storing and downloading models, and these models are stored in \*.safetensors files.
+**Takeaway**: A model is nothing but a **file** which contains a bunch of numbers in N-dimensional arrays. These numbers were learned via model training, and are applied to your input to produce the correct output. We use HuggingFace for storing, distributing and downloading models, and these models are stored in \*.safetensors files.
+
+### LLM high-level overview
+
+Now that we know that GPUs are used to run LLMs and we know that a model is nothing but a bunch of learned numbers, it's time to look at the high level flow of an LLM and focus-in on the important parts that we'll care about later:
+
+![LLM high level architecture](/blog/images/llm-platform-engineering-overview/llm-overview.png)
+
+#### Tokenization
+
+Tokenization is the process of splitting the input text into smaller units called _tokens_ which are then converted into numbers that the LLMs can work with.
