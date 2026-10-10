@@ -23,6 +23,8 @@ The answer is simple: **this is not going to stay like this for long**. If you a
 
 Stage 7 might have to wait a bit for a few companies -- but I have a really strong hunch that this is going to be the case for most, and we want to be ready. This series is intended to cover my understanding of the current landscape and to solidify some of what I've learned. The thing that's hard about this in general is the fact that as platform engineers, we have to understand **so much stuff**, and now there's a whole new area we need to dig into. Remember how long it took us to be comfortable with K8s? Now your HTTPRoute setup for your Gateway API implementation is useless, your HPA scaling based on memory/CPU utilization can be thrown out of the window, you'll come across new K8s terminology like _LeaderWorkerSet_ and _DisaggregatedSet_, traditional service meshes won't help you, and all the metrics you thought were important won't matter that much anymore. TL;DR: a fun journey lies ahead!
 
+NOTE: This particular article is going to be a bit dense and won't contain many follow-along examples, but the truth is that we must understand many things about LLM architecture well enough (_as platform engineers we don't really care about the underlying math of the models, SoftMax functions, tensor transformations and so on_) to be able to reason about operating + debugging + observing + serving them.
+
 ### Why are GPUs all the rage now?
 
 As far as raw resources are concerned, we've only had to deal with disk, CPU, and memory. Disk space has been a non-factor for a long time because SSDs and HDDs have become dirt cheap. Memory and CPU, on the other hand have always been considered precious resources, so our focus has been on these two.
@@ -40,11 +42,11 @@ LLMs need to execute a **huge number of matrix operations** because nearly every
 
 It is also worth mentioning that there are models that can be run on CPUs (for example SmolLM) because their parameter counts are small enough that the amount of computation and memory movement stays manageable on a CPU. In general, **the number of parameters is strongly correlated with how much compute power is needed: more parameters mean more weights must be loaded and more multiply-accumulate operations must be performed for each token**, so larger models require much more memory bandwidth and processing throughput. SmolLM has a version that has only 135 million parameters, whereas something like Llama 3.1 405B has **405 billion parameters** -- good luck running that on your gaming CPU!
 
-**Takeaway: GPUs are much more suited architecturally on the hardware level for the matrix operations that are needed for LLMs to calculate.**
+**Takeaway**: GPUs are much more suited architecturally on the hardware level for the matrix operations that are needed for LLMs to calculate, so you'll be using them.
 
 ### The model
 
-In the previous paragraph about GPUs we have touched on a few keywords: models, parameters, vectors, transformers, and the high-level architectural overview of LLMs contain keywords like prefill, decode, tokenization, etc. Don't worry about these for now, we'll understand them later just enough so that we'll get a high level overview _enough for a platform engineer_.
+In the previous paragraph about GPUs we have touched on a few keywords: models, parameters, vectors, transformers, and the high-level architectural overview of LLMs contain keywords like prefill, decode, tokenization, etc. Don't worry about these for now, we'll understand them later just enough so that we'll get a high level overview _enough for platform engineers_.
 
 LLM stands for Large Language **Model** so it would be great to understand what a **model** actually is -- for that let's see one. Spoiler alert: it's a big file with a bunch of boring N-dimensional arrays.
 
@@ -103,4 +105,4 @@ If you expected to see a lot of interesting stuff inside the model code, now you
 
 ![Overly-simplified way of looking at models](/blog/images/llm-platform-engineering-overview/simplified-overview-model.png)
 
-**Takeaway: A model is nothing but a file which contains a bunch of numbers in N-dimensional arrays. These numbers were learned via model training, and are applied to your input to produce the output. We use HuggingFace for storing and downloading models**.
+**Takeaway**: A model is nothing but a **file** which contains a bunch of numbers in N-dimensional arrays. These numbers were learned via model training, and are applied to your input to produce the correct output. We use HuggingFace for storing and downloading models, and these models are stored in \*.safetensors files.
