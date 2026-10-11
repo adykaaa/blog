@@ -157,7 +157,7 @@ you -> 498
 ? -> 30
 ```
 
-Great but what now, you might ask. Well the model cannot really do anything with these integer numbers -- remember how everything in a model is represented as matrices (n-dimensional matrices aka. tensors). Luckily, these models all have a big **table** where each ID is mapped to an embedding vector. For example if the model uses embeddings with 4 dimensions (the number of dimensions for these embeddings are different for models. Usually the larger the model (aka. has more parameters) the higher the dimension numbers:
+Great but what now, you might ask. Well the model cannot really do anything with these integer numbers -- remember how everything in a model is represented as matrices (n-dimensional matrices aka. tensors). Luckily, these models all have a big **table** where each ID is mapped to an embedding vector. For example if the model uses embeddings with 4 dimensions (the number of dimensions for these embeddings are different for models, usually the larger the model -- aka. has more parameters -- the higher the dimension numbers):
 
 ```text
 9707 → [ 0.8, -0.2,  0.4,  0.1 ]   # hello
