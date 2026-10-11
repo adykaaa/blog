@@ -113,7 +113,7 @@ Now that we know why GPUs are used to run LLMs and we know that a model is nothi
 
 #### Tokenization
 
-Tokenization is the process of splitting the input text into smaller units called _tokens_ which are then converted into numbers that the LLMs can work with. Let's see it in an example.
+Tokenization is the process of splitting the input text (aka. your prompt) into smaller units called _tokens_ which are then converted into numbers that the LLMs can work with. This is the first major step in the workflow. Let's see it in an example where we'll see the token representations of the prompt _"Hello, how are you?"_.
 
 Install the transformers Python package:
 
