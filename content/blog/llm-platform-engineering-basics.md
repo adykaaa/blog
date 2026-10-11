@@ -174,3 +174,5 @@ input text -> tokenizer (CPU runs it) -> token embeddings are produced as N-dime
 ```
 
 There are some cases when tokenization is run on the GPU as well, when dealing with massive scale. For example NVIDIA has released some tokenizers that run on GPUs, if you are interested research it.
+
+**Takeaway**: Tokenization is the process where your prompt for the LLM is turned into vector embeddings that is forwarded to the model for processing. It usually runs on the CPU, at huge scale it runs on GPU as well.
