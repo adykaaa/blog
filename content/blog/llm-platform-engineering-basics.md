@@ -167,7 +167,13 @@ The models all have a big **table** where each ID is mapped to an **embedding ve
 498 → [ 0.1,  0.3,  0.7, -0.6 ]   # you
 ```
 
-so now the model understands our input, and is able to run it through the layers! Wooohoo!
+This **embedding table is part of the model's learned weights**, so it is another tensor inside the `model.safetensors` file we looked at earlier. Its shape is `[vocabulary size, embedding dimension]`: one row for each token ID, with each row containing that token's vector. Training learns these numbers, during **inference** the embedding layer just looks up the rows for our input tokens.
+
+Now our token IDs have become vectors that the transformer layers can process. Wooohoo! But **the lookup itself doesn't account for context yet**. For example, if `bank` has the same token ID in "river bank" and "bank account", it starts with the same embedding vector in both. The transformer layers then use the surrounding tokens to build different, context-dependent representations. We'll get to those layers next.
+
+Let's be clear here, **the embedding table takes up quite some memory**. [Qwen2.5-0.5B's configuration](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct/blob/main/config.json) specifies **151,936** vocabulary entries and **896** dimensions. That's `151,936 × 896 = 136,134,656` parameters -- roughly **260 MiB at two bytes per parameter**, just for the input embedding table!
+
+NOTE: you'll also hear about **embeddings for semantic search and RAG**. Here we're talking about the LLM's **internal, per-token embedding lookup**. Search systems (e.g the good old "talk to your PDF" apps) typically use an embedding model to produce a vector representing a whole query or text chunk, which can then be compared with other vectors.
 
 One last thing to mention about **tokenization** is that usually this is done by the **CPU**. If we think back to the first point about why GPUs are used for LLMs, we've learnt that because they are really good at **simple operations**. However in the process of tokenization, there are a lot of lookups, string manipulations, branching, etc. -- so complex operations which the CPU is awesome at! On a very oversimplified level the flow is something like:
 
