@@ -111,9 +111,9 @@ Now that we know why GPUs are used to run LLMs and we know that a model is nothi
 
 ![LLM high level architecture](/blog/images/llm-platform-engineering-overview/llm-overview.png)
 
-#### Tokenization and embeddings
+#### Tokenization and Embeddings
 
-Tokenization is the process of splitting the input text (aka. your prompt) into smaller units called _tokens_ which are then converted into simple integer numbers. Let's see it in an example where we'll see the token representations of the prompt _"Hello, how are you?"_.
+Tokenization is the process of splitting the input text (aka. your prompt) into smaller units called _tokens_ which are then converted into simple numbers. Let's see it in an example where we'll see the token representations of the prompt _"Hello, how are you?"_.
 
 Install the transformers Python package:
 
@@ -146,7 +146,7 @@ Token IDs: [9707, 11, 1246, 525, 498, 30]
 Tokens: ['Hello', ',', 'Ġhow', 'Ġare', 'Ġyou', '?']
 ```
 
-so now we can see how the input is split into tokens (be aware that a token does not equal a word!) and mapped to numbers. So the words are represented as the following numbers:
+so now we can see how the input is split into tokens (be aware that a token does not equal a word -- most of the time it's actually smaller than a word!) and mapped to numbers. So the words are represented as the following numbers:
 
 ```text
 Hello -> 9707
@@ -157,8 +157,8 @@ you -> 498
 ? -> 30
 ```
 
-Great but what now, you might ask. Well the model cannot really do anything with these integer numbers -- remember how everything in a model is represented as matrices (n-dimensional matrices aka. tensors). So now comes the _embedding_ part.
-These models all have a big **table** where each ID is mapped to an **embedding vector**. For example if the model uses embeddings with 4 dimensions (the number of dimensions for these embeddings are different for models, e.g for Qwen2.5-0.5B the hidden dimension is 896, so these tokens are represented by 896 dimensional tensors):
+Great but what now, you might ask. Well the model cannot really do anything with these integer numbers -- remember how everything in a model is represented as matrices (**n-dimensional matrices aka. tensors**). So now comes the _embedding_ part.
+The models all have a big **table** where each ID is mapped to an **embedding vector**. For example if the model uses embeddings with 4 dimensions (_the number of dimensions for these embeddings are different for models, e.g for Qwen2.5-0.5B the hidden dimension is 896, so these tokens are represented by 896 dimensional tensors, not just 4 like in the below example_):
 
 ```text
 9707 → [ 0.8, -0.2,  0.4,  0.1 ]  # hello
@@ -169,7 +169,7 @@ These models all have a big **table** where each ID is mapped to an **embedding 
 
 so now the model understands our input, and is able to run it through the layers! Wooohoo!
 
-One last thing to mention about **tokenization** is that usually this is done by the **CPU**. If we think back to the first point about why GPUs are used for LLMs, we've learnt that because they are really good at simple operations. However in the process outlined above, there are a lot of lookups, string manipulations, branching, etc. which the CPU is awesome at! On a very oversimplified level the flow is something like:
+One last thing to mention about **tokenization** is that usually this is done by the **CPU**. If we think back to the first point about why GPUs are used for LLMs, we've learnt that because they are really good at **simple operations**. However in the process of tokenization, there are a lot of lookups, string manipulations, branching, etc. -- so complex operations which the CPU is awesome at! On a very oversimplified level the flow is something like:
 
 ```text
 input text -> tokenizer (CPU runs it) -> token IDs [9707, 11, 1246, 525, 498, 30]
@@ -179,4 +179,4 @@ input text -> tokenizer (CPU runs it) -> token IDs [9707, 11, 1246, 525, 498, 30
 
 There are some cases when tokenization is run on the GPU as well, when dealing with massive scale. For example NVIDIA has released some tokenizers that run on GPUs, if you are interested go ahead and research it.
 
-**Takeaway**: Tokenization is the process where your prompt for the LLM is turned into simple numbers (CPU). Embedding is where these numbers' vector representation is looked up in vector embedding matrices inside the model (GPU) that the LLM can finally work with.
+**Takeaway**: Tokenization is the process where your prompt for the LLM is turned into simple numbers (work done by the CPU). Embedding is where these numbers' vector representation is looked up in vector embedding matrices inside the model (GPU) that the LLM can finally work with.
