@@ -126,7 +126,8 @@ and then execute the following code:
 ```python
 from transformers import AutoTokenizer
 
-# We use a tokenizer from the model Qwen2.5-0.5B-Instruct, but this could be almost any model with a pretrained tokenizer.
+# We use a tokenizer from the model Qwen2.5-0.5B-Instruct,
+# but this could be almost any model with a pretrained tokenizer.
 tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-0.5B-Instruct")
 
 # This is your input (prompt)
