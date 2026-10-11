@@ -113,4 +113,64 @@ Now that we know why GPUs are used to run LLMs and we know that a model is nothi
 
 #### Tokenization
 
-Tokenization is the process of splitting the input text into smaller units called _tokens_ which are then converted into numbers that the LLMs can work with.
+Tokenization is the process of splitting the input text into smaller units called _tokens_ which are then converted into numbers that the LLMs can work with. Let's see it in an example.
+
+Install the transformers Python package:
+
+```bash
+pip install transformers
+```
+
+and then execute the following code:
+
+```python
+from transformers import AutoTokenizer
+
+# We use a tokenizer from the model Qwen2.5-0.5B-Instruct, but this could be almost any model with a pretrained tokenizer.
+tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-0.5B-Instruct")
+
+# This is your input (prompt)
+text = "Hello, how are you?"
+
+ids = tokenizer.encode(text)
+
+print("Token IDs:", ids)
+print("Tokens:", tokenizer.convert_ids_to_tokens(ids))
+```
+
+it will print this:
+
+```text
+Token IDs: [9707, 11, 1246, 525, 498, 30]
+Tokens: ['Hello', ',', 'Ġhow', 'Ġare', 'Ġyou', '?']
+```
+
+so now we can see how the input is split into tokens (be aware that a token does not equal a word!) and mapped to numbers. So the words are represented as the following numbers:
+
+```text
+Hello -> 9707
+, -> 11
+how -> 1246
+are -> 525
+you -> 498
+? -> 30
+```
+
+Great but what now, you might ask. Well the model cannot really do anything with these integer numbers -- remember how everything in a model is represented as matrices (n-dimensional matrices aka. tensors). Luckily, these models all have a big **table** where each ID is mapped to an embedding vector. For example if the model uses embeddings with 4 dimensions (the number of dimensions for these embeddings are different for models. Usually the larger the model (aka. has more parameters) the higher the dimension numbers:
+
+```text
+9707 → [ 0.8, -0.2,  0.4,  0.1 ]   # hello
+1246 → [ 0.7, -0.3,  0.5,  0.0 ]   # how
+525 → [-0.4,  0.9, -0.1,  0.8 ]   # are
+498 → [ 0.1,  0.3,  0.7, -0.6 ]   # you
+```
+
+so now the model understands our input, and is able to run it through the layers! Wooohoo!
+
+One last thing to mention about **tokenization** is that usually this is done by the **CPU**. If we think back to the first point about why GPUs are used for LLMs, we've learnt that because they are really good at simple operations. However in the process outlined above, there are a lot of lookups, string manipulations, branching, etc. which the CPU is awesome at! On a very oversimplified level the flow is something like:
+
+```text
+input text -> tokenizer (CPU runs it) -> token embeddings are produced as N-dimensional vector embeddings -> handed over to GPU -> rest of the LLM workflow
+```
+
+There are some cases when tokenization is run on the GPU as well, when dealing with massive scale. For example NVIDIA has released some tokenizers that run on GPUs, if you are interested research it.
