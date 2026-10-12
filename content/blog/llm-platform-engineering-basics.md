@@ -2,7 +2,7 @@
 title: "LLM Inference Platform Engineering - Part 1 - Overview"
 date: 2026-10-10T18:00:00+02:00
 description: "The first part of my LLM Inference Platform Engineering series, providing a high-level overview."
-tags: ["Kubernetes", "AI", "GPU", "LLM"]
+tags: ["LLM", "Inference", "GPU", "Overview"]
 draft: false
 wideCode: true
 toc: true
