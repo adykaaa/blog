@@ -105,9 +105,9 @@ If you expected to see a lot of interesting stuff inside the model code, now you
 
 **Takeaway**: A model is nothing but a **file** which contains a bunch of numbers in N-dimensional arrays. These numbers were learned via model training, and are applied to your input to produce the correct output. We use HuggingFace for storing, distributing and downloading models (we can also store these locally in _PersistentVolumes_ or in cloud object stores), and these models use the .safetensors extension.
 
-## LLM high-level overview
+## LLM flow high-level overview
 
-Now that we know why GPUs are used to run LLMs and we know that a model is nothing but a bunch of learned numbers, it's time to look at the high level flow of an LLM and focus-in on the important parts that we'll care about later:
+Now that we know why GPUs are used to run LLMs and we know that a model is nothing but a bunch of learned numbers, it's time to look at the high level flow of how an LLM works and focus-in on the important parts that we'll care about later:
 
 ![LLM high level architecture](/blog/images/llm-platform-engineering-overview/llm-overview.png)
 
