@@ -169,7 +169,7 @@ The models all have a big **table** where each ID is mapped to an **embedding ve
 
 This **embedding table is part of the model's learned weights**, so it is another tensor inside the `model.safetensors` file we looked at earlier. Its shape is `[vocabulary size, embedding dimension]`: one row for each token ID, with each row containing that token's vector. Training learns these numbers, during **inference** the embedding layer just looks up the rows for our input tokens.
 
-Now our token IDs have become vectors that the transformer layers can process. Wooohoo! But **the lookup itself doesn't account for context yet**. For example, if `bank` has the same token ID in "river bank" and "bank account", it starts with the same embedding vector in both. The transformer layers then use the surrounding tokens to build different, context-dependent representations. We don't need to dive deeper into that, but it's good to know.
+Now our token IDs have become vectors that the transformer layers can process. Wooohoo! But **the lookup itself doesn't account for context yet**. For example, if `bank` has the same token ID in "river bank" and "bank account", it starts with the same embedding vector in both. The transformer layers then **use the surrounding tokens to build different, context-dependent representations**. We don't need to dive deeper into that, but it's good to know.
 
 ![Tokenization and Embedding](/blog/images/llm-platform-engineering-overview/tokenization-embedding.png)
 
