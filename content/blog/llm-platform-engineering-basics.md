@@ -25,7 +25,7 @@ Stage 7 might have to wait a bit for a few companies -- but I have a really stro
 
 NOTE: This particular article is going to be a bit dense and won't contain many follow-along examples, but the truth is that we must understand many things about LLM architecture well enough (_as platform engineers we don't really care about the underlying math of the models, SoftMax functions, tensor transformations and so on_) to be able to reason about operating + debugging + observing + serving them.
 
-# Why are GPUs all the rage now?
+## Why are GPUs all the rage now?
 
 As far as raw resources are concerned, we've only had to deal with disk, CPU, and memory. Disk space has been a non-factor for a long time because SSDs and HDDs have become dirt cheap. Memory and CPU, on the other hand have always been considered precious resources, so our focus has been on these two.
 We know that computation happens on the CPU -- so why on earth can't we keep using it for inference workloads? Those require computation, just like the server running my awesome backend rewritten in Rust, right? Well no.
@@ -42,17 +42,17 @@ It is also worth mentioning that there are models that can be run on CPUs (for e
 
 **Takeaway**: GPUs are much more suited architecturally on the hardware level for the matrix operations that are needed for LLMs to calculate, so you'll be using them.
 
-# The model
+## The model
 
 In the previous paragraph about GPUs we have touched on a few keywords: models, parameters, vectors, transformers, etc. Don't worry about these for now, we'll understand them later just enough so that we'll get a high level overview _enough for platform engineers_.
 
 LLM stands for Large Language **Model** so it would be great to understand what a **model** actually is -- for that let's see one. Spoiler alert: it's a big file with a bunch of boring N-dimensional arrays.
 
-## HuggingFace
+### HuggingFace
 
 [HuggingFace](https://huggingface.co) in essence is the **GitHub for models**. Here you can browse more than 2 million open-source models, as well as datasets for training models. It's best to get familiar with this website, as later on in our actual tutorials we'll use HuggingFace to download the LLM we are going to be experimenting with (also HF seems to be the industry standard for storing models as of writing this article).
 
-## Inside the model file
+### Inside the model file
 
 Let's look at the files for the [SmolLM2 with 135 million parameters](https://huggingface.co/HuggingFaceTB/SmolLM2-135M/tree/main) model (we could look at any other model, I chose this one for an example). As we can see there are a few configuration files, and one bigger file called **model.safetensors**:
 
@@ -105,13 +105,13 @@ If you expected to see a lot of interesting stuff inside the model code, now you
 
 **Takeaway**: A model is nothing but a **file** which contains a bunch of numbers in N-dimensional arrays. These numbers were learned via model training, and are applied to your input to produce the correct output. We use HuggingFace for storing, distributing and downloading models (we can also store these locally in _PersistentVolumes_ or in cloud object stores), and these models use the .safetensors extension.
 
-# LLM high-level overview
+## LLM high-level overview
 
 Now that we know why GPUs are used to run LLMs and we know that a model is nothing but a bunch of learned numbers, it's time to look at the high level flow of an LLM and focus-in on the important parts that we'll care about later:
 
 ![LLM high level architecture](/blog/images/llm-platform-engineering-overview/llm-overview.png)
 
-## Inference
+### Inference
 
 Whenever I saw the word **inference** I couldn't really tell what this really meant in the context of LLMs (maybe because I'm not a native english speaker, so it didn't really come across as self-explanatory). "During inference, the model does XYZ...." great but what the heck is inference? The definition of **infer** is to derive or conclude something from available information. When we talk about model inference, we talk about the whole process of feeding an **input** to a **model** so that it can use its **weights** it has learned during training to **infer** the output.
 
@@ -135,7 +135,7 @@ That whole process of running the trained model to produce an output is called i
 
 **Takeaway**: The word **inference** refers to the process of actually running the model and getting the output based on the inputs.
 
-## Tokenization and Embeddings
+### Tokenization and Embeddings
 
 **Tokenization** is the process of splitting the input text (aka. your prompt) into smaller units called _tokens_ which are then converted into simple numbers. Let's see it in an example where we'll see the token representations of the prompt _"Hello, how are you?"_.
 
