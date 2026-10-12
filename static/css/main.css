@@ -22,7 +22,7 @@
 
   --radius:     6px;
   --radius-lg:  12px;
-  --max-w:      720px;
+  --max-w:      900px;
   --header-h:   60px;
 }
 
@@ -32,7 +32,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html {
-  font-size: 125%;
+  font-size: 133%;
   -webkit-text-size-adjust: 100%;
   scroll-behavior: smooth;
 }
@@ -185,7 +185,7 @@ img { max-width: 100%; height: auto; display: block; }
 .hero-bio {
   font-size: 1.05rem;
   color: var(--text-muted);
-  max-width: 580px;
+  max-width: 760px;
   line-height: 1.75;
   margin-bottom: 28px;
 }

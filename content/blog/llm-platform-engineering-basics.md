@@ -1,7 +1,7 @@
 ---
 title: "LLM Inference Platform Engineering - Part 1 - Overview"
 date: 2026-10-10T18:00:00+02:00
-description: "The first part of my LLM Inference Platform Engineering series, providing a high-level overview."
+description: "The first part of my LLM Inference Platform Engineering series, providing a high-level overview of the inference process."
 tags: ["LLM", "Inference", "GPU", "Overview"]
 draft: false
 wideCode: true
@@ -214,3 +214,5 @@ input text -> tokenizer (CPU runs it) -> token IDs [9707, 11, 1246, 525, 498, 30
 There are some cases when tokenization is run on the GPU as well, when dealing with massive scale. For example NVIDIA has released some tokenizers that run on GPUs, if you are interested go ahead and research it.
 
 **Takeaway**: Tokenization is the process where your prompt for the LLM is turned into simple numbers (work done by the CPU). Embedding is where these numbers' vector representation is looked up in vector embedding matrices inside the model (GPU) that the LLM can finally work with.
+
+### Prefill
