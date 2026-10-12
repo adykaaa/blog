@@ -8,6 +8,8 @@ wideCode: true
 toc: true
 ---
 
+## Intro
+
 I wanted to see what a local LLM was doing without building a large observability platform around it. The result is a small CPU-only model on minikube, OpenLIT instrumentation, Prometheus and Tempo, and one Grafana dashboard focused on the questions I care about as a platform engineer: is it available, how long do requests take, where does capacity run out, and can I follow an individual inference request?
 
 The starting point was [Grafana’s zero-code AI observability article](https://grafana.com/blog/ai-observability-zero-code/). This runbook adapts that idea to a local, open-source stack. It uses real inference from SmolLM2 135M rather than synthetic AI responses. Everything needed to reproduce it is included inline below.
@@ -26,14 +28,14 @@ Dashboard overview:
 
 Grafana is the presentation layer. It queries **Prometheus for metrics** and **Tempo for traces**. It does not read the model’s weights or scrape the model itself.
 
-| Source | How it reaches the backends | What it measures |
-| --- | --- | --- |
-| llama.cpp model server | Prometheus scrapes `http://smollm-model:8080/metrics` | Native inference throughput, active requests, queued requests, prompt cache behavior and context high-water mark |
-| Python gateway | Prometheus scrapes `http://smollm-client:8080/metrics` | HTTP outcomes, successful request latency, arrival-to-first-content-token time, token counts, admission pressure and completion reasons |
-| OpenLIT SDK instrumentation | Sends OTLP to the Collector; Prometheus scrapes the Collector exporter at `http://otel-collector:8889/metrics`; the Collector forwards traces to Tempo | Instrumented OpenAI-compatible SDK call durations, token usage and inference spans |
-| Kubernetes kubelet/cAdvisor | Prometheus scrapes each node through the Kubernetes API proxy at `/api/v1/nodes/<node>/proxy/metrics/cadvisor` | Container CPU, memory working set, CPU throttling and OOM events |
-| Kubernetes API | The Collector’s `k8s_cluster` receiver reads workload metadata and exposes metrics through the same exporter | Readiness, restarts, desired/available replicas and configured resource limits |
-| Collector, Tempo and Prometheus | Prometheus scrapes their own metrics endpoints | Whether the monitoring pipeline is accepting, exporting and storing telemetry |
+| Source                          | How it reaches the backends                                                                                                                            | What it measures                                                                                                                        |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| llama.cpp model server          | Prometheus scrapes `http://smollm-model:8080/metrics`                                                                                                  | Native inference throughput, active requests, queued requests, prompt cache behavior and context high-water mark                        |
+| Python gateway                  | Prometheus scrapes `http://smollm-client:8080/metrics`                                                                                                 | HTTP outcomes, successful request latency, arrival-to-first-content-token time, token counts, admission pressure and completion reasons |
+| OpenLIT SDK instrumentation     | Sends OTLP to the Collector; Prometheus scrapes the Collector exporter at `http://otel-collector:8889/metrics`; the Collector forwards traces to Tempo | Instrumented OpenAI-compatible SDK call durations, token usage and inference spans                                                      |
+| Kubernetes kubelet/cAdvisor     | Prometheus scrapes each node through the Kubernetes API proxy at `/api/v1/nodes/<node>/proxy/metrics/cadvisor`                                         | Container CPU, memory working set, CPU throttling and OOM events                                                                        |
+| Kubernetes API                  | The Collector’s `k8s_cluster` receiver reads workload metadata and exposes metrics through the same exporter                                           | Readiness, restarts, desired/available replicas and configured resource limits                                                          |
+| Collector, Tempo and Prometheus | Prometheus scrapes their own metrics endpoints                                                                                                         | Whether the monitoring pipeline is accepting, exporting and storing telemetry                                                           |
 
 These addresses are Kubernetes Services inside the `ai-observability` namespace. Prometheus pulls the scrape endpoints periodically. OpenLIT instead pushes telemetry to the Collector’s OTLP endpoint. The `--metrics` flag on llama.cpp enables the model server’s native metrics endpoint; the gateway implements its own endpoint because the server cannot measure the entire caller-to-gateway experience.
 
@@ -145,50 +147,50 @@ Save the following as `grafana.yaml`:
 apiVersion: grafana.integreatly.org/v1beta1
 kind: Grafana
 metadata:
-  name: grafana
-  namespace: grafana
-  labels:
-    dashboards: grafana
+    name: grafana
+    namespace: grafana
+    labels:
+        dashboards: grafana
 spec:
-  version: 13.1.3
-  disableDefaultAdminSecret: true
-  config:
-    log:
-      mode: console
-    server:
-      protocol: http
-  persistentVolumeClaim:
-    spec:
-      accessModes: [ReadWriteOnce]
-      resources:
-        requests:
-          storage: 1Gi
-  deployment:
-    spec:
-      strategy:
-        type: Recreate
-        rollingUpdate: null
-      template:
+    version: 13.1.3
+    disableDefaultAdminSecret: true
+    config:
+        log:
+            mode: console
+        server:
+            protocol: http
+    persistentVolumeClaim:
         spec:
-          securityContext:
-            fsGroup: 472
-          volumes:
-            - name: grafana-data
-              persistentVolumeClaim:
-                claimName: grafana-pvc
-          containers:
-            - name: grafana
-              env:
-                - name: GF_SECURITY_ADMIN_USER
-                  valueFrom:
-                    secretKeyRef:
-                      name: grafana-admin
-                      key: GF_SECURITY_ADMIN_USER
-                - name: GF_SECURITY_ADMIN_PASSWORD
-                  valueFrom:
-                    secretKeyRef:
-                      name: grafana-admin
-                      key: GF_SECURITY_ADMIN_PASSWORD
+            accessModes: [ReadWriteOnce]
+            resources:
+                requests:
+                    storage: 1Gi
+    deployment:
+        spec:
+            strategy:
+                type: Recreate
+                rollingUpdate: null
+            template:
+                spec:
+                    securityContext:
+                        fsGroup: 472
+                    volumes:
+                        - name: grafana-data
+                          persistentVolumeClaim:
+                              claimName: grafana-pvc
+                    containers:
+                        - name: grafana
+                          env:
+                              - name: GF_SECURITY_ADMIN_USER
+                                valueFrom:
+                                    secretKeyRef:
+                                        name: grafana-admin
+                                        key: GF_SECURITY_ADMIN_USER
+                              - name: GF_SECURITY_ADMIN_PASSWORD
+                                valueFrom:
+                                    secretKeyRef:
+                                        name: grafana-admin
+                                        key: GF_SECURITY_ADMIN_PASSWORD
 ```
 
 ```bash
@@ -217,536 +219,536 @@ Save the following as `stack.yaml`:
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: ai-observability
+    name: ai-observability
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: prometheus
-  namespace: ai-observability
+    name: prometheus
+    namespace: ai-observability
 data:
-  config.yaml: |
-    global:
-      scrape_interval: 15s
-    scrape_configs:
-      - job_name: openlit
-        static_configs:
-          - targets: ['otel-collector:8889']
-      - job_name: smollm-model
-        static_configs:
-          - targets: ['smollm-model:8080']
-      - job_name: smollm-client
-        static_configs:
-          - targets: ['smollm-client:8080']
-      - job_name: collector-internal
-        static_configs:
-          - targets: ['otel-collector:8888']
-      - job_name: tempo
-        static_configs:
-          - targets: ['tempo:3200']
-      - job_name: kubelet-cadvisor
-        scheme: https
-        authorization:
-          credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token
-        tls_config:
-          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-        kubernetes_sd_configs:
-          - role: node
-        relabel_configs:
-          - source_labels: [__meta_kubernetes_node_name]
-            target_label: __metrics_path__
-            replacement: /api/v1/nodes/${1}/proxy/metrics/cadvisor
-          - target_label: __address__
-            replacement: kubernetes.default.svc:443
-        metric_relabel_configs:
-          - source_labels: [namespace, pod]
-            regex: 'ai-observability;smollm-(model|client)-.*'
-            action: keep
-          - source_labels: [__name__]
-            regex: 'container_(cpu_usage_seconds_total|cpu_cfs_periods_total|cpu_cfs_throttled_periods_total|memory_working_set_bytes|oom_events_total)'
-            action: keep
-      - job_name: prometheus
-        static_configs:
-          - targets: ['localhost:9090']
+    config.yaml: |
+        global:
+          scrape_interval: 15s
+        scrape_configs:
+          - job_name: openlit
+            static_configs:
+              - targets: ['otel-collector:8889']
+          - job_name: smollm-model
+            static_configs:
+              - targets: ['smollm-model:8080']
+          - job_name: smollm-client
+            static_configs:
+              - targets: ['smollm-client:8080']
+          - job_name: collector-internal
+            static_configs:
+              - targets: ['otel-collector:8888']
+          - job_name: tempo
+            static_configs:
+              - targets: ['tempo:3200']
+          - job_name: kubelet-cadvisor
+            scheme: https
+            authorization:
+              credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+            tls_config:
+              ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+            kubernetes_sd_configs:
+              - role: node
+            relabel_configs:
+              - source_labels: [__meta_kubernetes_node_name]
+                target_label: __metrics_path__
+                replacement: /api/v1/nodes/${1}/proxy/metrics/cadvisor
+              - target_label: __address__
+                replacement: kubernetes.default.svc:443
+            metric_relabel_configs:
+              - source_labels: [namespace, pod]
+                regex: 'ai-observability;smollm-(model|client)-.*'
+                action: keep
+              - source_labels: [__name__]
+                regex: 'container_(cpu_usage_seconds_total|cpu_cfs_periods_total|cpu_cfs_throttled_periods_total|memory_working_set_bytes|oom_events_total)'
+                action: keep
+          - job_name: prometheus
+            static_configs:
+              - targets: ['localhost:9090']
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: prometheus
-  namespace: ai-observability
+    name: prometheus
+    namespace: ai-observability
 spec:
-  accessModes:
-  - ReadWriteOnce
-  resources:
-    requests:
-      storage: 1Gi
+    accessModes:
+        - ReadWriteOnce
+    resources:
+        requests:
+            storage: 1Gi
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: prometheus
-  namespace: ai-observability
+    name: prometheus
+    namespace: ai-observability
 spec:
-  replicas: 1
-  strategy:
-    type: Recreate
-  selector:
-    matchLabels:
-      app: prometheus
-  template:
-    metadata:
-      labels:
+    replicas: 1
+    strategy:
+        type: Recreate
+    selector:
+        matchLabels:
+            app: prometheus
+    template:
+        metadata:
+            labels:
+                app: prometheus
+        spec:
+            serviceAccountName: prometheus
+            securityContext:
+                fsGroup: 10001
+            containers:
+                - name: prometheus
+                  image: prom/prometheus:v3.15.0
+                  args:
+                      - --config.file=/etc/observability/config.yaml
+                      - --storage.tsdb.path=/data
+                      - --storage.tsdb.retention.time=24h
+                      - --storage.tsdb.retention.size=512MB
+                  ports:
+                      - name: http
+                        containerPort: 9090
+                  volumeMounts:
+                      - name: config
+                        mountPath: /etc/observability
+                        readOnly: true
+                      - name: data
+                        mountPath: /data
+                  resources:
+                      requests:
+                          cpu: 25m
+                          memory: 64Mi
+                      limits:
+                          cpu: 500m
+                          memory: 256Mi
+                  readinessProbe:
+                      httpGet:
+                          path: /-/ready
+                          port: 9090
+                      initialDelaySeconds: 5
+                      periodSeconds: 5
+                  env:
+                      - name: GOMEMLIMIT
+                        value: 200MiB
+            volumes:
+                - name: config
+                  configMap:
+                      name: prometheus
+                - name: data
+                  persistentVolumeClaim:
+                      claimName: prometheus
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: prometheus
+    namespace: ai-observability
+spec:
+    selector:
         app: prometheus
-    spec:
-      serviceAccountName: prometheus
-      securityContext:
-        fsGroup: 10001
-      containers:
-      - name: prometheus
-        image: prom/prometheus:v3.15.0
-        args:
-        - --config.file=/etc/observability/config.yaml
-        - --storage.tsdb.path=/data
-        - --storage.tsdb.retention.time=24h
-        - --storage.tsdb.retention.size=512MB
-        ports:
+    ports:
         - name: http
-          containerPort: 9090
-        volumeMounts:
-        - name: config
-          mountPath: /etc/observability
-          readOnly: true
-        - name: data
-          mountPath: /data
-        resources:
-          requests:
-            cpu: 25m
-            memory: 64Mi
-          limits:
-            cpu: 500m
-            memory: 256Mi
-        readinessProbe:
-          httpGet:
-            path: /-/ready
-            port: 9090
-          initialDelaySeconds: 5
-          periodSeconds: 5
-        env:
-        - name: GOMEMLIMIT
-          value: 200MiB
-      volumes:
-      - name: config
-        configMap:
-          name: prometheus
-      - name: data
-        persistentVolumeClaim:
-          claimName: prometheus
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: prometheus
-  namespace: ai-observability
-spec:
-  selector:
-    app: prometheus
-  ports:
-  - name: http
-    port: 9090
-    targetPort: 9090
+          port: 9090
+          targetPort: 9090
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: otel-collector
-  namespace: ai-observability
+    name: otel-collector
+    namespace: ai-observability
 data:
-  config.yaml: |
-    receivers:
-      k8s_cluster:
-        auth_type: serviceAccount
-        collection_interval: 30s
-        namespaces: [ai-observability]
-        metrics:
-          k8s.container.cpu_limit:
-            enabled: true
-          k8s.container.memory_limit:
-            enabled: true
-      otlp:
-        protocols:
-          grpc:
-            endpoint: 0.0.0.0:4317
-          http:
-            endpoint: 0.0.0.0:4318
-    processors:
-      memory_limiter:
-        check_interval: 1s
-        limit_mib: 96
-        spike_limit_mib: 24
-      batch:
-        timeout: 2s
-    exporters:
-      nop:
-      prometheus:
-        endpoint: 0.0.0.0:8889
-        resource_to_telemetry_conversion:
-          enabled: true
-        enable_open_metrics: true
-      otlp/tempo:
-        endpoint: tempo:4317
-        tls:
-          insecure: true
-    extensions:
-      health_check:
-        endpoint: 0.0.0.0:13133
-    service:
-      telemetry:
-        metrics:
-          readers:
-            - pull:
-                exporter:
-                  prometheus:
-                    host: 0.0.0.0
-                    port: 8888
-                    without_type_suffix: true
-                    without_units: true
-      extensions: [health_check]
-      pipelines:
-        logs:
-          receivers: [otlp]
-          processors: [memory_limiter, batch]
-          exporters: [nop]
-        traces:
-          receivers: [otlp]
-          processors: [memory_limiter, batch]
-          exporters: [otlp/tempo]
-        metrics:
-          receivers: [otlp, k8s_cluster]
-          processors: [memory_limiter, batch]
-          exporters: [prometheus]
+    config.yaml: |
+        receivers:
+          k8s_cluster:
+            auth_type: serviceAccount
+            collection_interval: 30s
+            namespaces: [ai-observability]
+            metrics:
+              k8s.container.cpu_limit:
+                enabled: true
+              k8s.container.memory_limit:
+                enabled: true
+          otlp:
+            protocols:
+              grpc:
+                endpoint: 0.0.0.0:4317
+              http:
+                endpoint: 0.0.0.0:4318
+        processors:
+          memory_limiter:
+            check_interval: 1s
+            limit_mib: 96
+            spike_limit_mib: 24
+          batch:
+            timeout: 2s
+        exporters:
+          nop:
+          prometheus:
+            endpoint: 0.0.0.0:8889
+            resource_to_telemetry_conversion:
+              enabled: true
+            enable_open_metrics: true
+          otlp/tempo:
+            endpoint: tempo:4317
+            tls:
+              insecure: true
+        extensions:
+          health_check:
+            endpoint: 0.0.0.0:13133
+        service:
+          telemetry:
+            metrics:
+              readers:
+                - pull:
+                    exporter:
+                      prometheus:
+                        host: 0.0.0.0
+                        port: 8888
+                        without_type_suffix: true
+                        without_units: true
+          extensions: [health_check]
+          pipelines:
+            logs:
+              receivers: [otlp]
+              processors: [memory_limiter, batch]
+              exporters: [nop]
+            traces:
+              receivers: [otlp]
+              processors: [memory_limiter, batch]
+              exporters: [otlp/tempo]
+            metrics:
+              receivers: [otlp, k8s_cluster]
+              processors: [memory_limiter, batch]
+              exporters: [prometheus]
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: otel-collector
-  namespace: ai-observability
+    name: otel-collector
+    namespace: ai-observability
 spec:
-  replicas: 1
-  strategy:
-    type: Recreate
-  selector:
-    matchLabels:
-      app: otel-collector
-  template:
-    metadata:
-      labels:
-        app: otel-collector
-    spec:
-      serviceAccountName: otel-collector
-      securityContext:
-        fsGroup: 10001
-      containers:
-      - name: otel-collector
-        image: otel/opentelemetry-collector-contrib:0.161.0
-        args:
-        - --config=/etc/observability/config.yaml
-        ports:
-        - name: otlp-grpc
-          containerPort: 4317
-        - name: otlp-http
-          containerPort: 4318
-        - name: metrics
-          containerPort: 8889
-        - name: internal
-          containerPort: 8888
-        - name: health
-          containerPort: 13133
-        volumeMounts:
-        - name: config
-          mountPath: /etc/observability
-          readOnly: true
-        resources:
-          requests:
-            cpu: 25m
-            memory: 32Mi
-          limits:
-            cpu: 500m
-            memory: 128Mi
-        readinessProbe:
-          httpGet:
-            path: /
-            port: 13133
-          initialDelaySeconds: 5
-          periodSeconds: 5
-        env:
-        - name: GOMEMLIMIT
-          value: 100MiB
-      volumes:
-      - name: config
-        configMap:
-          name: otel-collector
+    replicas: 1
+    strategy:
+        type: Recreate
+    selector:
+        matchLabels:
+            app: otel-collector
+    template:
+        metadata:
+            labels:
+                app: otel-collector
+        spec:
+            serviceAccountName: otel-collector
+            securityContext:
+                fsGroup: 10001
+            containers:
+                - name: otel-collector
+                  image: otel/opentelemetry-collector-contrib:0.161.0
+                  args:
+                      - --config=/etc/observability/config.yaml
+                  ports:
+                      - name: otlp-grpc
+                        containerPort: 4317
+                      - name: otlp-http
+                        containerPort: 4318
+                      - name: metrics
+                        containerPort: 8889
+                      - name: internal
+                        containerPort: 8888
+                      - name: health
+                        containerPort: 13133
+                  volumeMounts:
+                      - name: config
+                        mountPath: /etc/observability
+                        readOnly: true
+                  resources:
+                      requests:
+                          cpu: 25m
+                          memory: 32Mi
+                      limits:
+                          cpu: 500m
+                          memory: 128Mi
+                  readinessProbe:
+                      httpGet:
+                          path: /
+                          port: 13133
+                      initialDelaySeconds: 5
+                      periodSeconds: 5
+                  env:
+                      - name: GOMEMLIMIT
+                        value: 100MiB
+            volumes:
+                - name: config
+                  configMap:
+                      name: otel-collector
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: otel-collector
-  namespace: ai-observability
+    name: otel-collector
+    namespace: ai-observability
 spec:
-  selector:
-    app: otel-collector
-  ports:
-  - name: otlp-grpc
-    port: 4317
-    targetPort: 4317
-  - name: otlp-http
-    port: 4318
-    targetPort: 4318
-  - name: metrics
-    port: 8889
-    targetPort: 8889
-  - name: internal
-    port: 8888
-    targetPort: 8888
-  - name: health
-    port: 13133
-    targetPort: 13133
+    selector:
+        app: otel-collector
+    ports:
+        - name: otlp-grpc
+          port: 4317
+          targetPort: 4317
+        - name: otlp-http
+          port: 4318
+          targetPort: 4318
+        - name: metrics
+          port: 8889
+          targetPort: 8889
+        - name: internal
+          port: 8888
+          targetPort: 8888
+        - name: health
+          port: 13133
+          targetPort: 13133
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: tempo
-  namespace: ai-observability
+    name: tempo
+    namespace: ai-observability
 data:
-  config.yaml: |
-    server:
-      http_listen_port: 3200
-    distributor:
-      receivers:
-        otlp:
-          protocols:
-            grpc:
-              endpoint: 0.0.0.0:4317
-            http:
-              endpoint: 0.0.0.0:4318
-    ingester:
-      max_block_duration: 5m
-    compactor:
-      compaction:
-        block_retention: 24h
-    storage:
-      trace:
-        backend: local
-        wal:
-          path: /data/wal
-        local:
-          path: /data/blocks
+    config.yaml: |
+        server:
+          http_listen_port: 3200
+        distributor:
+          receivers:
+            otlp:
+              protocols:
+                grpc:
+                  endpoint: 0.0.0.0:4317
+                http:
+                  endpoint: 0.0.0.0:4318
+        ingester:
+          max_block_duration: 5m
+        compactor:
+          compaction:
+            block_retention: 24h
+        storage:
+          trace:
+            backend: local
+            wal:
+              path: /data/wal
+            local:
+              path: /data/blocks
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: tempo
-  namespace: ai-observability
+    name: tempo
+    namespace: ai-observability
 spec:
-  accessModes:
-  - ReadWriteOnce
-  resources:
-    requests:
-      storage: 2Gi
+    accessModes:
+        - ReadWriteOnce
+    resources:
+        requests:
+            storage: 2Gi
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: tempo
-  namespace: ai-observability
+    name: tempo
+    namespace: ai-observability
 spec:
-  replicas: 1
-  strategy:
-    type: Recreate
-  selector:
-    matchLabels:
-      app: tempo
-  template:
-    metadata:
-      labels:
-        app: tempo
-    spec:
-      serviceAccountName: default
-      securityContext:
-        fsGroup: 10001
-      containers:
-      - name: tempo
-        image: grafana/tempo:2.10.8
-        args:
-        - -config.file=/etc/observability/config.yaml
-        ports:
-        - name: http
-          containerPort: 3200
-        - name: otlp-grpc
-          containerPort: 4317
-        - name: otlp-http
-          containerPort: 4318
-        volumeMounts:
-        - name: config
-          mountPath: /etc/observability
-          readOnly: true
-        - name: data
-          mountPath: /data
-        resources:
-          requests:
-            cpu: 25m
-            memory: 64Mi
-          limits:
-            cpu: 500m
-            memory: 256Mi
-        readinessProbe:
-          httpGet:
-            path: /ready
-            port: 3200
-          initialDelaySeconds: 5
-          periodSeconds: 5
-        env:
-        - name: GOMEMLIMIT
-          value: 200MiB
-      volumes:
-      - name: config
-        configMap:
-          name: tempo
-      - name: data
-        persistentVolumeClaim:
-          claimName: tempo
+    replicas: 1
+    strategy:
+        type: Recreate
+    selector:
+        matchLabels:
+            app: tempo
+    template:
+        metadata:
+            labels:
+                app: tempo
+        spec:
+            serviceAccountName: default
+            securityContext:
+                fsGroup: 10001
+            containers:
+                - name: tempo
+                  image: grafana/tempo:2.10.8
+                  args:
+                      - -config.file=/etc/observability/config.yaml
+                  ports:
+                      - name: http
+                        containerPort: 3200
+                      - name: otlp-grpc
+                        containerPort: 4317
+                      - name: otlp-http
+                        containerPort: 4318
+                  volumeMounts:
+                      - name: config
+                        mountPath: /etc/observability
+                        readOnly: true
+                      - name: data
+                        mountPath: /data
+                  resources:
+                      requests:
+                          cpu: 25m
+                          memory: 64Mi
+                      limits:
+                          cpu: 500m
+                          memory: 256Mi
+                  readinessProbe:
+                      httpGet:
+                          path: /ready
+                          port: 3200
+                      initialDelaySeconds: 5
+                      periodSeconds: 5
+                  env:
+                      - name: GOMEMLIMIT
+                        value: 200MiB
+            volumes:
+                - name: config
+                  configMap:
+                      name: tempo
+                - name: data
+                  persistentVolumeClaim:
+                      claimName: tempo
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: tempo
-  namespace: ai-observability
+    name: tempo
+    namespace: ai-observability
 spec:
-  selector:
-    app: tempo
-  ports:
-  - name: http
-    port: 3200
-    targetPort: 3200
-  - name: otlp-grpc
-    port: 4317
-    targetPort: 4317
-  - name: otlp-http
-    port: 4318
-    targetPort: 4318
+    selector:
+        app: tempo
+    ports:
+        - name: http
+          port: 3200
+          targetPort: 3200
+        - name: otlp-grpc
+          port: 4317
+          targetPort: 4317
+        - name: otlp-http
+          port: 4318
+          targetPort: 4318
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: prometheus
-  namespace: ai-observability
+    name: prometheus
+    namespace: ai-observability
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: otel-collector
-  namespace: ai-observability
+    name: otel-collector
+    namespace: ai-observability
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: llm-prometheus-kubelet
+    name: llm-prometheus-kubelet
 rules:
-- apiGroups:
-  - ''
-  resources:
-  - nodes
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - ''
-  resources:
-  - nodes/proxy
-  verbs:
-  - get
+    - apiGroups:
+          - ""
+      resources:
+          - nodes
+      verbs:
+          - get
+          - list
+          - watch
+    - apiGroups:
+          - ""
+      resources:
+          - nodes/proxy
+      verbs:
+          - get
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: llm-prometheus-kubelet
+    name: llm-prometheus-kubelet
 roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: llm-prometheus-kubelet
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: llm-prometheus-kubelet
 subjects:
-- kind: ServiceAccount
-  name: prometheus
-  namespace: ai-observability
+    - kind: ServiceAccount
+      name: prometheus
+      namespace: ai-observability
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: otel-k8s-metadata
-  namespace: ai-observability
+    name: otel-k8s-metadata
+    namespace: ai-observability
 rules:
-- apiGroups:
-  - ''
-  resources:
-  - pods
-  - services
-  - events
-  - replicationcontrollers
-  - resourcequotas
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - apps
-  resources:
-  - deployments
-  - replicasets
-  - daemonsets
-  - statefulsets
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - batch
-  resources:
-  - jobs
-  - cronjobs
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - autoscaling
-  resources:
-  - horizontalpodautoscalers
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - discovery.k8s.io
-  resources:
-  - endpointslices
-  verbs:
-  - get
-  - list
-  - watch
+    - apiGroups:
+          - ""
+      resources:
+          - pods
+          - services
+          - events
+          - replicationcontrollers
+          - resourcequotas
+      verbs:
+          - get
+          - list
+          - watch
+    - apiGroups:
+          - apps
+      resources:
+          - deployments
+          - replicasets
+          - daemonsets
+          - statefulsets
+      verbs:
+          - get
+          - list
+          - watch
+    - apiGroups:
+          - batch
+      resources:
+          - jobs
+          - cronjobs
+      verbs:
+          - get
+          - list
+          - watch
+    - apiGroups:
+          - autoscaling
+      resources:
+          - horizontalpodautoscalers
+      verbs:
+          - get
+          - list
+          - watch
+    - apiGroups:
+          - discovery.k8s.io
+      resources:
+          - endpointslices
+      verbs:
+          - get
+          - list
+          - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: otel-k8s-metadata
-  namespace: ai-observability
+    name: otel-k8s-metadata
+    namespace: ai-observability
 roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: otel-k8s-metadata
+    apiGroup: rbac.authorization.k8s.io
+    kind: Role
+    name: otel-k8s-metadata
 subjects:
-- kind: ServiceAccount
-  name: otel-collector
-  namespace: ai-observability
+    - kind: ServiceAccount
+      name: otel-collector
+      namespace: ai-observability
 ```
 
 ```bash
@@ -764,14 +766,14 @@ Save the following as `openlit-values.yaml`:
 
 ```yaml
 operator:
-  defaultInitImage: ghcr.io/openlit/openlit-ai-instrumentation:0.0.2
+    defaultInitImage: ghcr.io/openlit/openlit-ai-instrumentation:0.0.2
 resources:
-  requests:
-    cpu: 25m
-    memory: 32Mi
-  limits:
-    cpu: 250m
-    memory: 128Mi
+    requests:
+        cpu: 25m
+        memory: 32Mi
+    limits:
+        cpu: 250m
+        memory: 128Mi
 ```
 
 ```bash
@@ -790,21 +792,21 @@ Save the following as `openlit-instrumentation.yaml`:
 apiVersion: openlit.io/v1alpha1
 kind: AutoInstrumentation
 metadata:
-  name: grafana-observability
-  namespace: ai-observability
+    name: grafana-observability
+    namespace: ai-observability
 spec:
-  selector:
-    matchLabels:
-      instrumentation: openlit
-  python:
-    instrumentation:
-      enabled: true
-      provider: openlit
-      version: "0.0.2"
-  otlp:
-    endpoint: http://otel-collector.ai-observability.svc.cluster.local:4318
-  resource:
-    environment: minikube
+    selector:
+        matchLabels:
+            instrumentation: openlit
+    python:
+        instrumentation:
+            enabled: true
+            provider: openlit
+            version: "0.0.2"
+    otlp:
+        endpoint: http://otel-collector.ai-observability.svc.cluster.local:4318
+    resource:
+        environment: minikube
 ```
 
 ```bash
@@ -1028,193 +1030,193 @@ Save the following as `model-gateway.yaml`:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: smollm-model
-  namespace: ai-observability
+    name: smollm-model
+    namespace: ai-observability
 spec:
-  accessModes:
-  - ReadWriteOnce
-  resources:
-    requests:
-      storage: 512Mi
+    accessModes:
+        - ReadWriteOnce
+    resources:
+        requests:
+            storage: 512Mi
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: smollm-model
-  namespace: ai-observability
+    name: smollm-model
+    namespace: ai-observability
 spec:
-  replicas: 1
-  strategy:
-    type: Recreate
-  selector:
-    matchLabels:
-      app: smollm-model
-  template:
-    metadata:
-      labels:
+    replicas: 1
+    strategy:
+        type: Recreate
+    selector:
+        matchLabels:
+            app: smollm-model
+    template:
+        metadata:
+            labels:
+                app: smollm-model
+        spec:
+            initContainers:
+                - name: download-model
+                  image: curlimages/curl:8.17.0
+                  command:
+                      - sh
+                      - -c
+                      - |
+                          set -eu
+                          if [ -f /models/smollm2.gguf ] && \
+                            echo '8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684  /models/smollm2.gguf' | sha256sum -c -; then
+                            exit 0
+                          fi
+                          curl --fail --location --retry 3 \
+                            https://registry.ollama.ai/v2/library/smollm2/blobs/sha256:8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684 \
+                            -o /models/smollm2.gguf.part
+                          echo '8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684  /models/smollm2.gguf.part' | sha256sum -c -
+                          mv /models/smollm2.gguf.part /models/smollm2.gguf
+                  securityContext:
+                      runAsUser: 0
+                  resources:
+                      requests:
+                          cpu: 10m
+                          memory: 16Mi
+                      limits:
+                          cpu: 250m
+                          memory: 64Mi
+                  volumeMounts:
+                      - name: models
+                        mountPath: /models
+            containers:
+                - name: model
+                  image: ghcr.io/ggml-org/llama.cpp@sha256:1cdfea0828170c34d56a8a6d9fc5a0898e8bca3762e5ec6be0c01032f7f7bde8
+                  args:
+                      - --model
+                      - /models/smollm2.gguf
+                      - --alias
+                      - smollm2:135m-instruct-q4_K_M
+                      - --host
+                      - 0.0.0.0
+                      - --port
+                      - "8080"
+                      - --ctx-size
+                      - "512"
+                      - --parallel
+                      - "1"
+                      - --threads
+                      - "2"
+                      - --threads-batch
+                      - "2"
+                      - --n-gpu-layers
+                      - "0"
+                      - --batch-size
+                      - "64"
+                      - --ubatch-size
+                      - "64"
+                      - --metrics
+                  ports:
+                      - name: http
+                        containerPort: 8080
+                  volumeMounts:
+                      - name: models
+                        mountPath: /models
+                        readOnly: true
+                  resources:
+                      requests:
+                          cpu: 50m
+                          memory: 128Mi
+                      limits:
+                          cpu: "2"
+                          memory: 384Mi
+                  startupProbe:
+                      httpGet:
+                          path: /health
+                          port: 8080
+                      failureThreshold: 60
+                      periodSeconds: 5
+                  readinessProbe:
+                      httpGet:
+                          path: /health
+                          port: 8080
+                      periodSeconds: 10
+            volumes:
+                - name: models
+                  persistentVolumeClaim:
+                      claimName: smollm-model
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: smollm-client
+    namespace: ai-observability
+spec:
+    replicas: 1
+    strategy:
+        type: Recreate
+    selector:
+        matchLabels:
+            app: smollm-client
+    template:
+        metadata:
+            labels:
+                app: smollm-client
+                instrumentation: openlit
+        spec:
+            containers:
+                - name: client
+                  image: local/smollm-client:1
+                  imagePullPolicy: Never
+                  command:
+                      - python
+                      - -u
+                      - /app/app.py
+                  ports:
+                      - name: http
+                        containerPort: 8080
+                  env:
+                      - name: MODEL_BASE_URL
+                        value: http://smollm-model:8080/v1
+                      - name: OTEL_METRIC_EXPORT_INTERVAL
+                        value: "15000"
+                      - name: OPENLIT_DISABLE_EVENTS
+                        value: "true"
+                  resources:
+                      requests:
+                          cpu: 10m
+                          memory: 96Mi
+                      limits:
+                          cpu: 250m
+                          memory: 192Mi
+                  readinessProbe:
+                      httpGet:
+                          path: /health
+                          port: 8080
+                      initialDelaySeconds: 5
+                      periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: smollm-model
+    namespace: ai-observability
+spec:
+    selector:
         app: smollm-model
-    spec:
-      initContainers:
-      - name: download-model
-        image: curlimages/curl:8.17.0
-        command:
-        - sh
-        - -c
-        - |
-          set -eu
-          if [ -f /models/smollm2.gguf ] && \
-            echo '8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684  /models/smollm2.gguf' | sha256sum -c -; then
-            exit 0
-          fi
-          curl --fail --location --retry 3 \
-            https://registry.ollama.ai/v2/library/smollm2/blobs/sha256:8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684 \
-            -o /models/smollm2.gguf.part
-          echo '8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684  /models/smollm2.gguf.part' | sha256sum -c -
-          mv /models/smollm2.gguf.part /models/smollm2.gguf
-        securityContext:
-          runAsUser: 0
-        resources:
-          requests:
-            cpu: 10m
-            memory: 16Mi
-          limits:
-            cpu: 250m
-            memory: 64Mi
-        volumeMounts:
-        - name: models
-          mountPath: /models
-      containers:
-      - name: model
-        image: ghcr.io/ggml-org/llama.cpp@sha256:1cdfea0828170c34d56a8a6d9fc5a0898e8bca3762e5ec6be0c01032f7f7bde8
-        args:
-        - --model
-        - /models/smollm2.gguf
-        - --alias
-        - smollm2:135m-instruct-q4_K_M
-        - --host
-        - 0.0.0.0
-        - --port
-        - '8080'
-        - --ctx-size
-        - '512'
-        - --parallel
-        - '1'
-        - --threads
-        - '2'
-        - --threads-batch
-        - '2'
-        - --n-gpu-layers
-        - '0'
-        - --batch-size
-        - '64'
-        - --ubatch-size
-        - '64'
-        - --metrics
-        ports:
+    ports:
         - name: http
-          containerPort: 8080
-        volumeMounts:
-        - name: models
-          mountPath: /models
-          readOnly: true
-        resources:
-          requests:
-            cpu: 50m
-            memory: 128Mi
-          limits:
-            cpu: '2'
-            memory: 384Mi
-        startupProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          failureThreshold: 60
-          periodSeconds: 5
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          periodSeconds: 10
-      volumes:
-      - name: models
-        persistentVolumeClaim:
-          claimName: smollm-model
+          port: 8080
+          targetPort: 8080
 ---
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: v1
+kind: Service
 metadata:
-  name: smollm-client
-  namespace: ai-observability
+    name: smollm-client
+    namespace: ai-observability
 spec:
-  replicas: 1
-  strategy:
-    type: Recreate
-  selector:
-    matchLabels:
-      app: smollm-client
-  template:
-    metadata:
-      labels:
+    selector:
         app: smollm-client
-        instrumentation: openlit
-    spec:
-      containers:
-      - name: client
-        image: local/smollm-client:1
-        imagePullPolicy: Never
-        command:
-        - python
-        - -u
-        - /app/app.py
-        ports:
+    ports:
         - name: http
-          containerPort: 8080
-        env:
-        - name: MODEL_BASE_URL
-          value: http://smollm-model:8080/v1
-        - name: OTEL_METRIC_EXPORT_INTERVAL
-          value: '15000'
-        - name: OPENLIT_DISABLE_EVENTS
-          value: 'true'
-        resources:
-          requests:
-            cpu: 10m
-            memory: 96Mi
-          limits:
-            cpu: 250m
-            memory: 192Mi
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 5
-          periodSeconds: 10
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: smollm-model
-  namespace: ai-observability
-spec:
-  selector:
-    app: smollm-model
-  ports:
-  - name: http
-    port: 8080
-    targetPort: 8080
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: smollm-client
-  namespace: ai-observability
-spec:
-  selector:
-    app: smollm-client
-  ports:
-  - name: http
-    port: 8080
-    targetPort: 8080
+          port: 8080
+          targetPort: 8080
 ```
 
 ```bash
@@ -1244,43 +1246,43 @@ Save the following as `datasources.yaml`:
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaDatasource
 metadata:
-  name: ai-prometheus
-  namespace: grafana
+    name: ai-prometheus
+    namespace: grafana
 spec:
-  instanceSelector:
-    matchLabels:
-      dashboards: grafana
-  datasource:
-    name: AI Prometheus
-    uid: ai-prometheus
-    type: prometheus
-    access: proxy
-    url: http://prometheus.ai-observability.svc.cluster.local:9090
-    isDefault: true
-    jsonData:
-      httpMethod: POST
+    instanceSelector:
+        matchLabels:
+            dashboards: grafana
+    datasource:
+        name: AI Prometheus
+        uid: ai-prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus.ai-observability.svc.cluster.local:9090
+        isDefault: true
+        jsonData:
+            httpMethod: POST
 ---
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaDatasource
 metadata:
-  name: ai-tempo
-  namespace: grafana
+    name: ai-tempo
+    namespace: grafana
 spec:
-  instanceSelector:
-    matchLabels:
-      dashboards: grafana
-  datasource:
-    name: AI Tempo
-    uid: ai-tempo
-    type: tempo
-    access: proxy
-    url: http://tempo.ai-observability.svc.cluster.local:3200
-    isDefault: false
-    jsonData:
-      tracesToMetrics:
-        datasourceUid: ai-prometheus
-      nodeGraph:
-        enabled: true
+    instanceSelector:
+        matchLabels:
+            dashboards: grafana
+    datasource:
+        name: AI Tempo
+        uid: ai-tempo
+        type: tempo
+        access: proxy
+        url: http://tempo.ai-observability.svc.cluster.local:3200
+        isDefault: false
+        jsonData:
+            tracesToMetrics:
+                datasourceUid: ai-prometheus
+            nodeGraph:
+                enabled: true
 ```
 
 ```bash
@@ -1293,16 +1295,16 @@ The full dashboard definition is embedded as JSON in the YAML resource below, as
 
 Coverage:
 
-| Question | Signals |
-| --- | --- |
-| Is inference healthy? | Model/client scrape health, HTTP outcomes, valid-request success fraction, desired/available replicas, readiness |
-| Is it fast? | Gateway and SDK p50/p95/p99, measured model TTFT, example ≤1-second fast-success SLI |
-| How much work is being done? | Input/output token rates and volumes, p95 tokens/request, finish reasons, output-cap fraction |
-| Is inference efficient? | Prefill/decode throughput during active inference, decode time/token, prompt-cache hit fraction |
-| Is it saturated? | Admitted requests, admission capacity, active inference, server queue, context-length high-water mark |
-| Is the platform constraining it? | CPU/memory versus limits, CFS throttling, OOM events, container restarts |
-| Can the telemetry be trusted? | Scrape health, Collector accepted/refused spans and metrics, exporter failures/queue, Tempo ingest |
-| Which requests explain a regression? | Embedded trace search table for `smollm-client` |
+| Question                             | Signals                                                                                                          |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| Is inference healthy?                | Model/client scrape health, HTTP outcomes, valid-request success fraction, desired/available replicas, readiness |
+| Is it fast?                          | Gateway and SDK p50/p95/p99, measured model TTFT, example ≤1-second fast-success SLI                             |
+| How much work is being done?         | Input/output token rates and volumes, p95 tokens/request, finish reasons, output-cap fraction                    |
+| Is inference efficient?              | Prefill/decode throughput during active inference, decode time/token, prompt-cache hit fraction                  |
+| Is it saturated?                     | Admitted requests, admission capacity, active inference, server queue, context-length high-water mark            |
+| Is the platform constraining it?     | CPU/memory versus limits, CFS throttling, OOM events, container restarts                                         |
+| Can the telemetry be trusted?        | Scrape health, Collector accepted/refused spans and metrics, exporter failures/queue, Tempo ingest               |
+| Which requests explain a regression? | Embedded trace search table for `smollm-client`                                                                  |
 
 No artificial dollar-cost, GPU, semantic quality, or live KV-occupancy panels are shown. Those measurements are unavailable/not applicable to this CPU-only lab. The context signal is explicitly a high-water mark. The one-second latency threshold is illustrative, not an agreed production SLO.
 
@@ -1312,1843 +1314,1843 @@ Save the following as `dashboard.yaml`:
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaDashboard
 metadata:
-  name: smollm-local
-  namespace: grafana
+    name: smollm-local
+    namespace: grafana
 spec:
-  instanceSelector:
-    matchLabels:
-      dashboards: grafana
-  folder: AI Observability
-  json: |
-    {
-      "uid": "smollm-local",
-      "title": "Local LLM / Platform Operations",
-      "schemaVersion": 39,
-      "version": 2,
-      "refresh": "15s",
-      "time": {
-        "from": "now-30m",
-        "to": "now"
-      },
-      "tags": [
-        "llm",
-        "platform",
-        "openlit"
-      ],
-      "panels": [
+    instanceSelector:
+        matchLabels:
+            dashboards: grafana
+    folder: AI Observability
+    json: |
         {
-          "id": 1,
-          "type": "row",
-          "title": "Service health and traffic",
-          "collapsed": false,
-          "panels": [],
-          "gridPos": {
-            "x": 0,
-            "y": 0,
-            "w": 24,
-            "h": 1
-          }
-        },
-        {
-          "id": 2,
-          "title": "Model ready",
-          "description": "Scrape/model availability, independent of whether traffic exists.",
-          "type": "stat",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
+          "uid": "smollm-local",
+          "title": "Local LLM / Platform Operations",
+          "schemaVersion": 39,
+          "version": 2,
+          "refresh": "15s",
+          "time": {
+            "from": "now-30m",
+            "to": "now"
           },
-          "gridPos": {
-            "x": 0,
-            "y": 1,
-            "w": 4,
-            "h": 4
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
+          "tags": [
+            "llm",
+            "platform",
+            "openlit"
+          ],
+          "panels": [
+            {
+              "id": 1,
+              "type": "row",
+              "title": "Service health and traffic",
+              "collapsed": false,
+              "panels": [],
+              "gridPos": {
+                "x": 0,
+                "y": 0,
+                "w": 24,
+                "h": 1
+              }
+            },
+            {
+              "id": 2,
+              "title": "Model ready",
+              "description": "Scrape/model availability, independent of whether traffic exists.",
+              "type": "stat",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
               },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "red",
-                    "value": null
-                  },
-                  {
-                    "color": "green",
-                    "value": 1
-                  }
-                ]
-              }
-            },
-            "overrides": []
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "up{job=\"smollm-model\"}",
-              "legendFormat": "value",
-              "instant": true
-            }
-          ],
-          "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
-            },
-            "colorMode": "value",
-            "graphMode": "none",
-            "textMode": "auto"
-          }
-        },
-        {
-          "id": 3,
-          "title": "Client ready",
-          "description": "Metrics endpoint availability. Check replicas below for Kubernetes readiness.",
-          "type": "stat",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 4,
-            "y": 1,
-            "w": 4,
-            "h": 4
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
+              "gridPos": {
+                "x": 0,
+                "y": 1,
+                "w": 4,
+                "h": 4
               },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "red",
-                    "value": null
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
                   },
-                  {
-                    "color": "green",
-                    "value": 1
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "red",
+                        "value": null
+                      },
+                      {
+                        "color": "green",
+                        "value": 1
+                      }
+                    ]
                   }
-                ]
-              }
-            },
-            "overrides": []
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "up{job=\"smollm-client\"}",
-              "legendFormat": "value",
-              "instant": true
-            }
-          ],
-          "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "up{job=\"smollm-model\"}",
+                  "legendFormat": "value",
+                  "instant": true
+                }
               ],
-              "fields": "",
-              "values": false
-            },
-            "colorMode": "value",
-            "graphMode": "none",
-            "textMode": "auto"
-          }
-        },
-        {
-          "id": 4,
-          "title": "Requests / selected range",
-          "description": "Counter increases over the selected window. Very first samples may not have a preceding baseline.",
-          "type": "stat",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 8,
-            "y": 1,
-            "w": 4,
-            "h": 4
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
+              "options": {
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "colorMode": "value",
+                "graphMode": "none",
+                "textMode": "auto"
               }
             },
-            "overrides": []
-          },
-          "targets": [
             {
-              "refId": "A",
-              "expr": "sum(increase(local_llm_http_requests_total{job=\"smollm-client\"}[$__range]))",
-              "legendFormat": "value",
-              "instant": true
-            }
-          ],
-          "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
+              "id": 3,
+              "title": "Client ready",
+              "description": "Metrics endpoint availability. Check replicas below for Kubernetes readiness.",
+              "type": "stat",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 4,
+                "y": 1,
+                "w": 4,
+                "h": 4
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "red",
+                        "value": null
+                      },
+                      {
+                        "color": "green",
+                        "value": 1
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "up{job=\"smollm-client\"}",
+                  "legendFormat": "value",
+                  "instant": true
+                }
               ],
-              "fields": "",
-              "values": false
-            },
-            "colorMode": "value",
-            "graphMode": "none",
-            "textMode": "auto"
-          }
-        },
-        {
-          "id": 5,
-          "title": "Valid-request success / selected range",
-          "description": "Valid statuses: 200, 429, 502, 504. Input-validation errors are excluded. Idle windows have no success percentage.",
-          "type": "stat",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 12,
-            "y": 1,
-            "w": 4,
-            "h": 4
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "percent",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
+              "options": {
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "colorMode": "value",
+                "graphMode": "none",
+                "textMode": "auto"
               }
             },
-            "overrides": []
-          },
-          "targets": [
             {
-              "refId": "A",
-              "expr": "100 * sum(increase(local_llm_http_requests_total{job=\"smollm-client\",status=\"200\"}[$__range])) / sum(increase(local_llm_http_requests_total{job=\"smollm-client\",status=~\"200|429|502|504\"}[$__range]))",
-              "legendFormat": "value",
-              "instant": true
-            }
-          ],
-          "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
+              "id": 4,
+              "title": "Requests / selected range",
+              "description": "Counter increases over the selected window. Very first samples may not have a preceding baseline.",
+              "type": "stat",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 8,
+                "y": 1,
+                "w": 4,
+                "h": 4
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum(increase(local_llm_http_requests_total{job=\"smollm-client\"}[$__range]))",
+                  "legendFormat": "value",
+                  "instant": true
+                }
               ],
-              "fields": "",
-              "values": false
-            },
-            "colorMode": "value",
-            "graphMode": "none",
-            "textMode": "auto"
-          }
-        },
-        {
-          "id": 6,
-          "title": "P95 successful request duration",
-          "description": "Successful request processing through the gateway, including server queueing. The HTTP response is buffered until complete.",
-          "type": "stat",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 16,
-            "y": 1,
-            "w": 4,
-            "h": 4
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "s",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
+              "options": {
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "colorMode": "value",
+                "graphMode": "none",
+                "textMode": "auto"
               }
             },
-            "overrides": []
-          },
-          "targets": [
             {
-              "refId": "A",
-              "expr": "histogram_quantile(0.95, sum by(le) (rate(local_llm_http_duration_seconds_bucket{job=\"smollm-client\"}[$__rate_interval])))",
-              "legendFormat": "p95",
-              "instant": true
-            }
-          ],
-          "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
+              "id": 5,
+              "title": "Valid-request success / selected range",
+              "description": "Valid statuses: 200, 429, 502, 504. Input-validation errors are excluded. Idle windows have no success percentage.",
+              "type": "stat",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 12,
+                "y": 1,
+                "w": 4,
+                "h": 4
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percent",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "100 * sum(increase(local_llm_http_requests_total{job=\"smollm-client\",status=\"200\"}[$__range])) / sum(increase(local_llm_http_requests_total{job=\"smollm-client\",status=~\"200|429|502|504\"}[$__range]))",
+                  "legendFormat": "value",
+                  "instant": true
+                }
               ],
-              "fields": "",
-              "values": false
-            },
-            "colorMode": "value",
-            "graphMode": "none",
-            "textMode": "auto"
-          }
-        },
-        {
-          "id": 7,
-          "title": "P95 first model token",
-          "description": "Gateway arrival to first nonempty model stream chunk; includes queueing and prefill. This is not first-byte latency seen by the HTTP caller.",
-          "type": "stat",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 20,
-            "y": 1,
-            "w": 4,
-            "h": 4
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "s",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
+              "options": {
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "colorMode": "value",
+                "graphMode": "none",
+                "textMode": "auto"
               }
             },
-            "overrides": []
-          },
-          "targets": [
             {
-              "refId": "A",
-              "expr": "histogram_quantile(0.95, sum by(le) (rate(local_llm_first_token_seconds_bucket{job=\"smollm-client\"}[$__rate_interval])))",
-              "legendFormat": "p95",
-              "instant": true
-            }
-          ],
-          "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
+              "id": 6,
+              "title": "P95 successful request duration",
+              "description": "Successful request processing through the gateway, including server queueing. The HTTP response is buffered until complete.",
+              "type": "stat",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 16,
+                "y": 1,
+                "w": 4,
+                "h": 4
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "histogram_quantile(0.95, sum by(le) (rate(local_llm_http_duration_seconds_bucket{job=\"smollm-client\"}[$__rate_interval])))",
+                  "legendFormat": "p95",
+                  "instant": true
+                }
               ],
-              "fields": "",
-              "values": false
-            },
-            "colorMode": "value",
-            "graphMode": "none",
-            "textMode": "auto"
-          }
-        },
-        {
-          "id": 8,
-          "title": "HTTP requests by outcome",
-          "description": "",
-          "type": "timeseries",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 0,
-            "y": 5,
-            "w": 12,
-            "h": 8
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "reqps",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
+              "options": {
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "colorMode": "value",
+                "graphMode": "none",
+                "textMode": "auto"
               }
             },
-            "overrides": []
-          },
-          "targets": [
             {
-              "refId": "A",
-              "expr": "sum by(status) (rate(local_llm_http_requests_total{job=\"smollm-client\"}[$__rate_interval]))",
-              "legendFormat": "{{status}}",
-              "instant": false
-            }
-          ],
-          "options": {
-            "legend": {
-              "displayMode": "table",
-              "placement": "bottom",
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          }
-        },
-        {
-          "id": 9,
-          "title": "HTTP failure and admission-rejection rates",
-          "description": "Separate backend failures from explicit overload rejection. Zero traffic gives no percentage, not an artificial 100% success.",
-          "type": "timeseries",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 12,
-            "y": 5,
-            "w": 12,
-            "h": 8
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "percent",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
-              }
-            },
-            "overrides": []
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "100 * sum(rate(local_llm_http_requests_total{job=\"smollm-client\",status=~\"502|504\"}[$__rate_interval])) / sum(rate(local_llm_http_requests_total{job=\"smollm-client\",status=~\"200|429|502|504\"}[$__rate_interval]))",
-              "legendFormat": "5xx / valid requests",
-              "instant": false
-            },
-            {
-              "refId": "B",
-              "expr": "100 * sum(rate(local_llm_http_requests_total{job=\"smollm-client\",status=\"429\"}[$__rate_interval])) / sum(rate(local_llm_http_requests_total{job=\"smollm-client\",status=~\"200|429|502|504\"}[$__rate_interval]))",
-              "legendFormat": "429 / valid requests",
-              "instant": false
-            }
-          ],
-          "options": {
-            "legend": {
-              "displayMode": "table",
-              "placement": "bottom",
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          }
-        },
-        {
-          "id": 10,
-          "type": "row",
-          "title": "Latency, streaming, and reliability",
-          "collapsed": false,
-          "panels": [],
-          "gridPos": {
-            "x": 0,
-            "y": 13,
-            "w": 24,
-            "h": 1
-          }
-        },
-        {
-          "id": 11,
-          "title": "Successful request duration: p50 / p95 / p99",
-          "description": "Histogram estimates over the rate window. Low request volume limits percentile precision.",
-          "type": "timeseries",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 0,
-            "y": 14,
-            "w": 12,
-            "h": 8
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "s",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
-              }
-            },
-            "overrides": []
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "histogram_quantile(0.5, sum by(le) (rate(local_llm_http_duration_seconds_bucket{job=\"smollm-client\"}[$__rate_interval])))",
-              "legendFormat": "p50",
-              "instant": false
-            },
-            {
-              "refId": "B",
-              "expr": "histogram_quantile(0.95, sum by(le) (rate(local_llm_http_duration_seconds_bucket{job=\"smollm-client\"}[$__rate_interval])))",
-              "legendFormat": "p95",
-              "instant": false
-            },
-            {
-              "refId": "C",
-              "expr": "histogram_quantile(0.99, sum by(le) (rate(local_llm_http_duration_seconds_bucket{job=\"smollm-client\"}[$__rate_interval])))",
-              "legendFormat": "p99",
-              "instant": false
-            }
-          ],
-          "options": {
-            "legend": {
-              "displayMode": "table",
-              "placement": "bottom",
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          }
-        },
-        {
-          "id": 12,
-          "title": "First model token: p50 / p95 / p99",
-          "description": "",
-          "type": "timeseries",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 12,
-            "y": 14,
-            "w": 12,
-            "h": 8
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "s",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
-              }
-            },
-            "overrides": []
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "histogram_quantile(0.5, sum by(le) (rate(local_llm_first_token_seconds_bucket{job=\"smollm-client\"}[$__rate_interval])))",
-              "legendFormat": "p50",
-              "instant": false
-            },
-            {
-              "refId": "B",
-              "expr": "histogram_quantile(0.95, sum by(le) (rate(local_llm_first_token_seconds_bucket{job=\"smollm-client\"}[$__rate_interval])))",
-              "legendFormat": "p95",
-              "instant": false
-            },
-            {
-              "refId": "C",
-              "expr": "histogram_quantile(0.99, sum by(le) (rate(local_llm_first_token_seconds_bucket{job=\"smollm-client\"}[$__rate_interval])))",
-              "legendFormat": "p99",
-              "instant": false
-            }
-          ],
-          "options": {
-            "legend": {
-              "displayMode": "table",
-              "placement": "bottom",
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          }
-        },
-        {
-          "id": 13,
-          "title": "OpenLIT SDK duration: p50 / p95 / p99",
-          "description": "SDK streaming operation duration; compare with gateway latency for application overhead.",
-          "type": "timeseries",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 0,
-            "y": 22,
-            "w": 12,
-            "h": 8
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "s",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
-              }
-            },
-            "overrides": []
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "histogram_quantile(0.5, sum by(le) (rate(gen_ai_client_operation_duration_seconds_bucket{service_name=\"smollm-client\",gen_ai_request_model=\"smollm2:135m-instruct-q4_K_M\"}[$__rate_interval])))",
-              "legendFormat": "p50",
-              "instant": false
-            },
-            {
-              "refId": "B",
-              "expr": "histogram_quantile(0.95, sum by(le) (rate(gen_ai_client_operation_duration_seconds_bucket{service_name=\"smollm-client\",gen_ai_request_model=\"smollm2:135m-instruct-q4_K_M\"}[$__rate_interval])))",
-              "legendFormat": "p95",
-              "instant": false
-            },
-            {
-              "refId": "C",
-              "expr": "histogram_quantile(0.99, sum by(le) (rate(gen_ai_client_operation_duration_seconds_bucket{service_name=\"smollm-client\",gen_ai_request_model=\"smollm2:135m-instruct-q4_K_M\"}[$__rate_interval])))",
-              "legendFormat": "p99",
-              "instant": false
-            }
-          ],
-          "options": {
-            "legend": {
-              "displayMode": "table",
-              "placement": "bottom",
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          }
-        },
-        {
-          "id": 14,
-          "title": "Illustrative fast-success SLI (\u22641 s)",
-          "description": "Successful valid requests completed within one second / all valid requests. One second is a lab threshold, not an agreed production SLO.",
-          "type": "timeseries",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 12,
-            "y": 22,
-            "w": 12,
-            "h": 8
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "percent",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
-              }
-            },
-            "overrides": []
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "100 * sum(rate(local_llm_http_duration_seconds_bucket{job=\"smollm-client\",le=\"1.0\"}[$__rate_interval])) / sum(rate(local_llm_http_requests_total{job=\"smollm-client\",status=~\"200|429|502|504\"}[$__rate_interval]))",
-              "legendFormat": "success within 1 s",
-              "instant": false
-            }
-          ],
-          "options": {
-            "legend": {
-              "displayMode": "table",
-              "placement": "bottom",
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          }
-        },
-        {
-          "id": 15,
-          "title": "Completion finish reasons",
-          "description": "",
-          "type": "timeseries",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 0,
-            "y": 30,
-            "w": 12,
-            "h": 8
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "reqps",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
-              }
-            },
-            "overrides": []
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "sum by(finish_reason) (rate(local_llm_completions_total{job=\"smollm-client\"}[$__rate_interval]))",
-              "legendFormat": "{{finish_reason}}",
-              "instant": false
-            }
-          ],
-          "options": {
-            "legend": {
-              "displayMode": "table",
-              "placement": "bottom",
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          }
-        },
-        {
-          "id": 16,
-          "title": "Output capped at max_tokens",
-          "description": "Length finish reason means generation reached its output limit. This is distinct from a context-window error.",
-          "type": "timeseries",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 12,
-            "y": 30,
-            "w": 12,
-            "h": 8
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "percent",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
-              }
-            },
-            "overrides": []
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "100 * sum(rate(local_llm_completions_total{job=\"smollm-client\",finish_reason=\"length\"}[$__rate_interval])) / sum(rate(local_llm_completions_total{job=\"smollm-client\"}[$__rate_interval]))",
-              "legendFormat": "value",
-              "instant": false
-            }
-          ],
-          "options": {
-            "legend": {
-              "displayMode": "table",
-              "placement": "bottom",
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          }
-        },
-        {
-          "id": 17,
-          "type": "row",
-          "title": "Tokens and inference efficiency",
-          "collapsed": false,
-          "panels": [],
-          "gridPos": {
-            "x": 0,
-            "y": 38,
-            "w": 24,
-            "h": 1
-          }
-        },
-        {
-          "id": 18,
-          "title": "Input / output token rate",
-          "description": "",
-          "type": "timeseries",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 0,
-            "y": 39,
-            "w": 12,
-            "h": 8
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "suffix:tokens/s",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
-              }
-            },
-            "overrides": []
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "sum by(gen_ai_token_type) (rate(gen_ai_client_token_usage_sum{service_name=\"smollm-client\",gen_ai_request_model=\"smollm2:135m-instruct-q4_K_M\"}[$__rate_interval]))",
-              "legendFormat": "{{gen_ai_token_type}}",
-              "instant": false
-            }
-          ],
-          "options": {
-            "legend": {
-              "displayMode": "table",
-              "placement": "bottom",
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          }
-        },
-        {
-          "id": 19,
-          "title": "Tokens / selected range",
-          "description": "SDK-reported usage. Cached input tokens can differ from newly evaluated prompt tokens at the server.",
-          "type": "stat",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 12,
-            "y": 39,
-            "w": 12,
-            "h": 8
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
-              }
-            },
-            "overrides": []
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "sum by(gen_ai_token_type) (increase(gen_ai_client_token_usage_sum{service_name=\"smollm-client\",gen_ai_request_model=\"smollm2:135m-instruct-q4_K_M\"}[$__range]))",
-              "legendFormat": "{{gen_ai_token_type}}",
-              "instant": true
-            }
-          ],
-          "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
+              "id": 7,
+              "title": "P95 first model token",
+              "description": "Gateway arrival to first nonempty model stream chunk; includes queueing and prefill. This is not first-byte latency seen by the HTTP caller.",
+              "type": "stat",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 20,
+                "y": 1,
+                "w": 4,
+                "h": 4
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "histogram_quantile(0.95, sum by(le) (rate(local_llm_first_token_seconds_bucket{job=\"smollm-client\"}[$__rate_interval])))",
+                  "legendFormat": "p95",
+                  "instant": true
+                }
               ],
-              "fields": "",
-              "values": false
-            },
-            "colorMode": "value",
-            "graphMode": "none",
-            "textMode": "auto"
-          }
-        },
-        {
-          "id": 20,
-          "title": "P95 tokens per request",
-          "description": "",
-          "type": "timeseries",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 0,
-            "y": 47,
-            "w": 12,
-            "h": 8
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
+              "options": {
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "colorMode": "value",
+                "graphMode": "none",
+                "textMode": "auto"
               }
             },
-            "overrides": []
-          },
-          "targets": [
             {
-              "refId": "A",
-              "expr": "histogram_quantile(0.95,sum by(le) (rate(gen_ai_client_token_usage_bucket{service_name=\"smollm-client\",gen_ai_request_model=\"smollm2:135m-instruct-q4_K_M\",gen_ai_token_type=\"input\"}[$__rate_interval])))",
-              "legendFormat": "input",
-              "instant": false
-            },
-            {
-              "refId": "B",
-              "expr": "histogram_quantile(0.95,sum by(le) (rate(gen_ai_client_token_usage_bucket{service_name=\"smollm-client\",gen_ai_request_model=\"smollm2:135m-instruct-q4_K_M\",gen_ai_token_type=\"output\"}[$__rate_interval])))",
-              "legendFormat": "output",
-              "instant": false
-            }
-          ],
-          "options": {
-            "legend": {
-              "displayMode": "table",
-              "placement": "bottom",
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          }
-        },
-        {
-          "id": 21,
-          "title": "Prompt cache hit fraction",
-          "description": "Cached prompt tokens / (cached + newly evaluated prompt tokens). Native server counters, weighted over the rate window.",
-          "type": "timeseries",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 12,
-            "y": 47,
-            "w": 12,
-            "h": 8
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "percent",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
-              }
-            },
-            "overrides": []
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "100 * sum(rate(llamacpp:prompt_tokens_cached_total{job=\"smollm-model\"}[$__rate_interval])) / (sum(rate(llamacpp:prompt_tokens_cached_total{job=\"smollm-model\"}[$__rate_interval])) + sum(rate(llamacpp:prompt_tokens_total{job=\"smollm-model\"}[$__rate_interval])))",
-              "legendFormat": "value",
-              "instant": false
-            }
-          ],
-          "options": {
-            "legend": {
-              "displayMode": "table",
-              "placement": "bottom",
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          }
-        },
-        {
-          "id": 22,
-          "title": "Throughput while evaluating / decoding",
-          "description": "Tokens / CPU inference wall time. Excludes idle time; not equivalent to tokens per second delivered over the entire observation window.",
-          "type": "timeseries",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 0,
-            "y": 55,
-            "w": 12,
-            "h": 8
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "suffix:tokens/s",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
-              }
-            },
-            "overrides": []
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "sum(rate(llamacpp:prompt_tokens_total{job=\"smollm-model\"}[$__rate_interval])) / sum(rate(llamacpp:prompt_seconds_total{job=\"smollm-model\"}[$__rate_interval]))",
-              "legendFormat": "prefill",
-              "instant": false
-            },
-            {
-              "refId": "B",
-              "expr": "sum(rate(llamacpp:tokens_predicted_total{job=\"smollm-model\"}[$__rate_interval])) / sum(rate(llamacpp:tokens_predicted_seconds_total{job=\"smollm-model\"}[$__rate_interval]))",
-              "legendFormat": "decode",
-              "instant": false
-            }
-          ],
-          "options": {
-            "legend": {
-              "displayMode": "table",
-              "placement": "bottom",
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          }
-        },
-        {
-          "id": 23,
-          "title": "Mean decode time per output token",
-          "description": "Weighted server decode time / generated tokens, not a per-request latency percentile.",
-          "type": "timeseries",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 12,
-            "y": 55,
-            "w": 12,
-            "h": 8
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "s",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
-              }
-            },
-            "overrides": []
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "sum(rate(llamacpp:tokens_predicted_seconds_total{job=\"smollm-model\"}[$__rate_interval])) / sum(rate(llamacpp:tokens_predicted_total{job=\"smollm-model\"}[$__rate_interval]))",
-              "legendFormat": "value",
-              "instant": false
-            }
-          ],
-          "options": {
-            "legend": {
-              "displayMode": "table",
-              "placement": "bottom",
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          }
-        },
-        {
-          "id": 24,
-          "type": "row",
-          "title": "Saturation and resource pressure",
-          "collapsed": false,
-          "panels": [],
-          "gridPos": {
-            "x": 0,
-            "y": 63,
-            "w": 24,
-            "h": 1
-          }
-        },
-        {
-          "id": 25,
-          "title": "Admitted, active, and queued requests",
-          "description": "One server slot, at most two admitted requests. Gauges sampled every 15 s may miss very short queue spikes; the 429 counter does not.",
-          "type": "timeseries",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 0,
-            "y": 64,
-            "w": 12,
-            "h": 8
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
-              }
-            },
-            "overrides": []
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "local_llm_inflight_requests{job=\"smollm-client\"}",
-              "legendFormat": "gateway admitted",
-              "instant": false
-            },
-            {
-              "refId": "B",
-              "expr": "local_llm_admission_capacity{job=\"smollm-client\"}",
-              "legendFormat": "gateway capacity",
-              "instant": false
-            },
-            {
-              "refId": "C",
-              "expr": "llamacpp:requests_processing{job=\"smollm-model\"}",
-              "legendFormat": "server active",
-              "instant": false
-            },
-            {
-              "refId": "D",
-              "expr": "llamacpp:requests_deferred{job=\"smollm-model\"}",
-              "legendFormat": "server queue",
-              "instant": false
-            }
-          ],
-          "options": {
-            "legend": {
-              "displayMode": "table",
-              "placement": "bottom",
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          }
-        },
-        {
-          "id": 26,
-          "title": "Context length high-water mark / 512 tokens",
-          "description": "Highest sequence length seen since model start. This is not instantaneous KV-cache occupancy or current memory utilization.",
-          "type": "timeseries",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 12,
-            "y": 64,
-            "w": 12,
-            "h": 8
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "percent",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
-              }
-            },
-            "overrides": []
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "100 * llamacpp:n_tokens_max{job=\"smollm-model\"} / 512",
-              "legendFormat": "value",
-              "instant": false
-            }
-          ],
-          "options": {
-            "legend": {
-              "displayMode": "table",
-              "placement": "bottom",
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          }
-        },
-        {
-          "id": 27,
-          "title": "CPU usage / limits",
-          "description": "Kubelet cAdvisor pod-level CPU usage, with API-reported application-container limits. Uses the pod aggregate when available to avoid double counting.",
-          "type": "timeseries",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 0,
-            "y": 72,
-            "w": 12,
-            "h": 8
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "suffix:cores",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
-              }
-            },
-            "overrides": []
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "(sum by(pod) (rate(container_cpu_usage_seconds_total{job=\"kubelet-cadvisor\",namespace=\"ai-observability\",pod=~\"smollm-(model|client)-.*\",container=\"\"}[$__rate_interval])) or sum by(pod) (rate(container_cpu_usage_seconds_total{job=\"kubelet-cadvisor\",namespace=\"ai-observability\",pod=~\"smollm-(model|client)-.*\",container!=\"\",container!=\"POD\"}[$__rate_interval])))",
-              "legendFormat": "{{pod}} used",
-              "instant": false
-            },
-            {
-              "refId": "B",
-              "expr": "label_replace(sum by(k8s_pod_name) (k8s_container_cpu_limit{k8s_namespace_name=\"ai-observability\",k8s_pod_name=~\"smollm-(model|client)-.*\",k8s_container_name=~\"model|client\"}), \"pod\", \"$1\", \"k8s_pod_name\", \"(.*)\")",
-              "legendFormat": "{{pod}} limit",
-              "instant": false
-            }
-          ],
-          "options": {
-            "legend": {
-              "displayMode": "table",
-              "placement": "bottom",
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          }
-        },
-        {
-          "id": 28,
-          "title": "Working memory / limits",
-          "description": "",
-          "type": "timeseries",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 12,
-            "y": 72,
-            "w": 12,
-            "h": 8
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "bytes",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
-              }
-            },
-            "overrides": []
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "(sum by(pod) (container_memory_working_set_bytes{job=\"kubelet-cadvisor\",namespace=\"ai-observability\",pod=~\"smollm-(model|client)-.*\",container=\"\"}) or sum by(pod) (container_memory_working_set_bytes{job=\"kubelet-cadvisor\",namespace=\"ai-observability\",pod=~\"smollm-(model|client)-.*\",container!=\"\",container!=\"POD\"}))",
-              "legendFormat": "{{pod}} used",
-              "instant": false
-            },
-            {
-              "refId": "B",
-              "expr": "label_replace(sum by(k8s_pod_name) (k8s_container_memory_limit_bytes{k8s_namespace_name=\"ai-observability\",k8s_pod_name=~\"smollm-(model|client)-.*\",k8s_container_name=~\"model|client\"}), \"pod\", \"$1\", \"k8s_pod_name\", \"(.*)\")",
-              "legendFormat": "{{pod}} limit",
-              "instant": false
-            }
-          ],
-          "options": {
-            "legend": {
-              "displayMode": "table",
-              "placement": "bottom",
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          }
-        },
-        {
-          "id": 29,
-          "title": "CPU throttled periods",
-          "description": "Throttled CFS periods / elapsed CFS periods by pod. An idle denominator yields no percentage.",
-          "type": "timeseries",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 0,
-            "y": 80,
-            "w": 12,
-            "h": 8
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "percent",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
-              }
-            },
-            "overrides": []
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "100 * (sum by(pod) (rate(container_cpu_cfs_throttled_periods_total{job=\"kubelet-cadvisor\",namespace=\"ai-observability\",pod=~\"smollm-(model|client)-.*\",container=\"\"}[$__rate_interval])) or sum by(pod) (rate(container_cpu_cfs_throttled_periods_total{job=\"kubelet-cadvisor\",namespace=\"ai-observability\",pod=~\"smollm-(model|client)-.*\",container!=\"\",container!=\"POD\"}[$__rate_interval]))) / (sum by(pod) (rate(container_cpu_cfs_periods_total{job=\"kubelet-cadvisor\",namespace=\"ai-observability\",pod=~\"smollm-(model|client)-.*\",container=\"\"}[$__rate_interval])) or sum by(pod) (rate(container_cpu_cfs_periods_total{job=\"kubelet-cadvisor\",namespace=\"ai-observability\",pod=~\"smollm-(model|client)-.*\",container!=\"\",container!=\"POD\"}[$__rate_interval])))",
-              "legendFormat": "value",
-              "instant": false
-            }
-          ],
-          "options": {
-            "legend": {
-              "displayMode": "table",
-              "placement": "bottom",
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          }
-        },
-        {
-          "id": 30,
-          "title": "OOM events and container restarts",
-          "description": "Current cumulative counts. Kubernetes restart gauges can reset when pods are replaced; do not apply counter rate() semantics.",
-          "type": "timeseries",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 12,
-            "y": 80,
-            "w": 12,
-            "h": 8
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
-              }
-            },
-            "overrides": []
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "(sum by(pod) (container_oom_events_total{job=\"kubelet-cadvisor\",namespace=\"ai-observability\",pod=~\"smollm-(model|client)-.*\",container=\"\"}) or sum by(pod) (container_oom_events_total{job=\"kubelet-cadvisor\",namespace=\"ai-observability\",pod=~\"smollm-(model|client)-.*\",container!=\"\",container!=\"POD\"}))",
-              "legendFormat": "{{pod}} OOM events",
-              "instant": false
-            },
-            {
-              "refId": "B",
-              "expr": "sum by(k8s_pod_name) (k8s_container_restarts{k8s_namespace_name=\"ai-observability\",k8s_pod_name=~\"smollm-(model|client)-.*\",k8s_container_name=~\"model|client\"})",
-              "legendFormat": "{{k8s_pod_name}} restarts",
-              "instant": false
-            }
-          ],
-          "options": {
-            "legend": {
-              "displayMode": "table",
-              "placement": "bottom",
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          }
-        },
-        {
-          "id": 31,
-          "title": "Deployment desired / available replicas",
-          "description": "",
-          "type": "timeseries",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 0,
-            "y": 88,
-            "w": 12,
-            "h": 8
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
-              }
-            },
-            "overrides": []
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "k8s_deployment_desired{k8s_deployment_name=~\"smollm-(model|client)\"}",
-              "legendFormat": "{{k8s_deployment_name}} desired",
-              "instant": false
-            },
-            {
-              "refId": "B",
-              "expr": "k8s_deployment_available{k8s_deployment_name=~\"smollm-(model|client)\"}",
-              "legendFormat": "{{k8s_deployment_name}} available",
-              "instant": false
-            }
-          ],
-          "options": {
-            "legend": {
-              "displayMode": "table",
-              "placement": "bottom",
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          }
-        },
-        {
-          "id": 32,
-          "title": "Container readiness",
-          "description": "Kubernetes readiness from the existing Collector. Missing data is not treated as ready.",
-          "type": "stat",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 12,
-            "y": 88,
-            "w": 12,
-            "h": 8
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
-              }
-            },
-            "overrides": []
-          },
-          "targets": [
-            {
-              "refId": "A",
-              "expr": "k8s_container_ready{k8s_namespace_name=\"ai-observability\",k8s_pod_name=~\"smollm-(model|client)-.*\",k8s_container_name=~\"model|client\"}",
-              "legendFormat": "{{k8s_pod_name}}",
-              "instant": true
-            }
-          ],
-          "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
+              "id": 8,
+              "title": "HTTP requests by outcome",
+              "description": "",
+              "type": "timeseries",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 0,
+                "y": 5,
+                "w": 12,
+                "h": 8
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "reqps",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum by(status) (rate(local_llm_http_requests_total{job=\"smollm-client\"}[$__rate_interval]))",
+                  "legendFormat": "{{status}}",
+                  "instant": false
+                }
               ],
-              "fields": "",
-              "values": false
-            },
-            "colorMode": "value",
-            "graphMode": "none",
-            "textMode": "auto"
-          }
-        },
-        {
-          "id": 33,
-          "type": "row",
-          "title": "Telemetry health and trace drill-down",
-          "collapsed": false,
-          "panels": [],
-          "gridPos": {
-            "x": 0,
-            "y": 96,
-            "w": 24,
-            "h": 1
-          }
-        },
-        {
-          "id": 34,
-          "title": "Scrape health",
-          "description": "Read each target separately. A down metrics pipeline can make business panels empty even while inference still works.",
-          "type": "stat",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 0,
-            "y": 97,
-            "w": 24,
-            "h": 4
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
               }
             },
-            "overrides": []
-          },
-          "targets": [
             {
-              "refId": "A",
-              "expr": "up{job=~\"smollm-model|smollm-client|openlit|collector-internal|kubelet-cadvisor|tempo\"}",
-              "legendFormat": "{{job}}",
-              "instant": true
-            }
-          ],
-          "options": {
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
+              "id": 9,
+              "title": "HTTP failure and admission-rejection rates",
+              "description": "Separate backend failures from explicit overload rejection. Zero traffic gives no percentage, not an artificial 100% success.",
+              "type": "timeseries",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 12,
+                "y": 5,
+                "w": 12,
+                "h": 8
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percent",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "100 * sum(rate(local_llm_http_requests_total{job=\"smollm-client\",status=~\"502|504\"}[$__rate_interval])) / sum(rate(local_llm_http_requests_total{job=\"smollm-client\",status=~\"200|429|502|504\"}[$__rate_interval]))",
+                  "legendFormat": "5xx / valid requests",
+                  "instant": false
+                },
+                {
+                  "refId": "B",
+                  "expr": "100 * sum(rate(local_llm_http_requests_total{job=\"smollm-client\",status=\"429\"}[$__rate_interval])) / sum(rate(local_llm_http_requests_total{job=\"smollm-client\",status=~\"200|429|502|504\"}[$__rate_interval]))",
+                  "legendFormat": "429 / valid requests",
+                  "instant": false
+                }
               ],
-              "fields": "",
-              "values": false
-            },
-            "colorMode": "value",
-            "graphMode": "none",
-            "textMode": "auto"
-          }
-        },
-        {
-          "id": 35,
-          "title": "Collector accepted telemetry",
-          "description": "",
-          "type": "timeseries",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 0,
-            "y": 101,
-            "w": 12,
-            "h": 8
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
               }
             },
-            "overrides": []
-          },
-          "targets": [
             {
-              "refId": "A",
-              "expr": "sum(rate(otelcol_receiver_accepted_spans{receiver=\"otlp\"}[$__rate_interval]))",
-              "legendFormat": "spans / s",
-              "instant": false
-            },
-            {
-              "refId": "B",
-              "expr": "sum(rate(otelcol_receiver_accepted_metric_points{receiver=\"otlp\"}[$__rate_interval]))",
-              "legendFormat": "metric points / s",
-              "instant": false
-            }
-          ],
-          "options": {
-            "legend": {
-              "displayMode": "table",
-              "placement": "bottom",
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          }
-        },
-        {
-          "id": 36,
-          "title": "Collector refused or failed trace delivery",
-          "description": "Failure counters may be absent until the first failure. Use scrape health and queue gauges to distinguish uninitialized counters from a missing Collector.",
-          "type": "timeseries",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 12,
-            "y": 101,
-            "w": 12,
-            "h": 8
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
+              "id": 10,
+              "type": "row",
+              "title": "Latency, streaming, and reliability",
+              "collapsed": false,
+              "panels": [],
+              "gridPos": {
+                "x": 0,
+                "y": 13,
+                "w": 24,
+                "h": 1
               }
             },
-            "overrides": []
-          },
-          "targets": [
             {
-              "refId": "A",
-              "expr": "sum(rate(otelcol_receiver_refused_spans{receiver=\"otlp\"}[$__rate_interval]))",
-              "legendFormat": "refused spans / s",
-              "instant": false
-            },
-            {
-              "refId": "B",
-              "expr": "sum(rate(otelcol_exporter_send_failed_spans{exporter=\"otlp/tempo\"}[$__rate_interval]))",
-              "legendFormat": "failed sends / s",
-              "instant": false
-            },
-            {
-              "refId": "C",
-              "expr": "sum(rate(otelcol_exporter_enqueue_failed_spans{exporter=\"otlp/tempo\"}[$__rate_interval]))",
-              "legendFormat": "enqueue failures / s",
-              "instant": false
-            }
-          ],
-          "options": {
-            "legend": {
-              "displayMode": "table",
-              "placement": "bottom",
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          }
-        },
-        {
-          "id": 37,
-          "title": "Trace exporter queue / capacity",
-          "description": "",
-          "type": "timeseries",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 0,
-            "y": 109,
-            "w": 12,
-            "h": 8
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "short",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
+              "id": 11,
+              "title": "Successful request duration: p50 / p95 / p99",
+              "description": "Histogram estimates over the rate window. Low request volume limits percentile precision.",
+              "type": "timeseries",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 0,
+                "y": 14,
+                "w": 12,
+                "h": 8
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "histogram_quantile(0.5, sum by(le) (rate(local_llm_http_duration_seconds_bucket{job=\"smollm-client\"}[$__rate_interval])))",
+                  "legendFormat": "p50",
+                  "instant": false
+                },
+                {
+                  "refId": "B",
+                  "expr": "histogram_quantile(0.95, sum by(le) (rate(local_llm_http_duration_seconds_bucket{job=\"smollm-client\"}[$__rate_interval])))",
+                  "legendFormat": "p95",
+                  "instant": false
+                },
+                {
+                  "refId": "C",
+                  "expr": "histogram_quantile(0.99, sum by(le) (rate(local_llm_http_duration_seconds_bucket{job=\"smollm-client\"}[$__rate_interval])))",
+                  "legendFormat": "p99",
+                  "instant": false
+                }
+              ],
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
               }
             },
-            "overrides": []
-          },
-          "targets": [
             {
-              "refId": "A",
-              "expr": "otelcol_exporter_queue_size{exporter=\"otlp/tempo\"}",
-              "legendFormat": "queued batches",
-              "instant": false
-            },
-            {
-              "refId": "B",
-              "expr": "otelcol_exporter_queue_capacity{exporter=\"otlp/tempo\"}",
-              "legendFormat": "capacity",
-              "instant": false
-            }
-          ],
-          "options": {
-            "legend": {
-              "displayMode": "table",
-              "placement": "bottom",
-              "calcs": [
-                "lastNotNull"
-              ]
-            },
-            "tooltip": {
-              "mode": "multi"
-            }
-          }
-        },
-        {
-          "id": 38,
-          "title": "Tempo spans received",
-          "description": "",
-          "type": "timeseries",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ai-prometheus"
-          },
-          "gridPos": {
-            "x": 12,
-            "y": 109,
-            "w": 12,
-            "h": 8
-          },
-          "fieldConfig": {
-            "defaults": {
-              "unit": "suffix:spans/s",
-              "decimals": 2,
-              "noValue": "No samples",
-              "color": {
-                "mode": "palette-classic"
+              "id": 12,
+              "title": "First model token: p50 / p95 / p99",
+              "description": "",
+              "type": "timeseries",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 12,
+                "y": 14,
+                "w": 12,
+                "h": 8
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "histogram_quantile(0.5, sum by(le) (rate(local_llm_first_token_seconds_bucket{job=\"smollm-client\"}[$__rate_interval])))",
+                  "legendFormat": "p50",
+                  "instant": false
+                },
+                {
+                  "refId": "B",
+                  "expr": "histogram_quantile(0.95, sum by(le) (rate(local_llm_first_token_seconds_bucket{job=\"smollm-client\"}[$__rate_interval])))",
+                  "legendFormat": "p95",
+                  "instant": false
+                },
+                {
+                  "refId": "C",
+                  "expr": "histogram_quantile(0.99, sum by(le) (rate(local_llm_first_token_seconds_bucket{job=\"smollm-client\"}[$__rate_interval])))",
+                  "legendFormat": "p99",
+                  "instant": false
+                }
+              ],
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
               }
             },
-            "overrides": []
-          },
-          "targets": [
             {
-              "refId": "A",
-              "expr": "sum(rate(tempo_distributor_spans_received_total[$__rate_interval]))",
-              "legendFormat": "value",
-              "instant": false
-            }
-          ],
-          "options": {
-            "legend": {
-              "displayMode": "table",
-              "placement": "bottom",
-              "calcs": [
-                "lastNotNull"
-              ]
+              "id": 13,
+              "title": "OpenLIT SDK duration: p50 / p95 / p99",
+              "description": "SDK streaming operation duration; compare with gateway latency for application overhead.",
+              "type": "timeseries",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 0,
+                "y": 22,
+                "w": 12,
+                "h": 8
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "histogram_quantile(0.5, sum by(le) (rate(gen_ai_client_operation_duration_seconds_bucket{service_name=\"smollm-client\",gen_ai_request_model=\"smollm2:135m-instruct-q4_K_M\"}[$__rate_interval])))",
+                  "legendFormat": "p50",
+                  "instant": false
+                },
+                {
+                  "refId": "B",
+                  "expr": "histogram_quantile(0.95, sum by(le) (rate(gen_ai_client_operation_duration_seconds_bucket{service_name=\"smollm-client\",gen_ai_request_model=\"smollm2:135m-instruct-q4_K_M\"}[$__rate_interval])))",
+                  "legendFormat": "p95",
+                  "instant": false
+                },
+                {
+                  "refId": "C",
+                  "expr": "histogram_quantile(0.99, sum by(le) (rate(gen_ai_client_operation_duration_seconds_bucket{service_name=\"smollm-client\",gen_ai_request_model=\"smollm2:135m-instruct-q4_K_M\"}[$__rate_interval])))",
+                  "legendFormat": "p99",
+                  "instant": false
+                }
+              ],
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
             },
-            "tooltip": {
-              "mode": "multi"
-            }
-          }
-        },
-        {
-          "id": 39,
-          "title": "Successful and failed inference traces",
-          "type": "table",
-          "datasource": {
-            "type": "tempo",
-            "uid": "ai-tempo"
-          },
-          "gridPos": {
-            "x": 0,
-            "y": 117,
-            "w": 24,
-            "h": 9
-          },
-          "targets": [
             {
-              "refId": "A",
-              "queryType": "traceql",
-              "query": "{ resource.service.name = \"smollm-client\" }",
-              "limit": 20,
-              "tableType": "traces"
+              "id": 14,
+              "title": "Illustrative fast-success SLI (\u22641 s)",
+              "description": "Successful valid requests completed within one second / all valid requests. One second is a lab threshold, not an agreed production SLO.",
+              "type": "timeseries",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 12,
+                "y": 22,
+                "w": 12,
+                "h": 8
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percent",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "100 * sum(rate(local_llm_http_duration_seconds_bucket{job=\"smollm-client\",le=\"1.0\"}[$__rate_interval])) / sum(rate(local_llm_http_requests_total{job=\"smollm-client\",status=~\"200|429|502|504\"}[$__rate_interval]))",
+                  "legendFormat": "success within 1 s",
+                  "instant": false
+                }
+              ],
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 15,
+              "title": "Completion finish reasons",
+              "description": "",
+              "type": "timeseries",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 0,
+                "y": 30,
+                "w": 12,
+                "h": 8
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "reqps",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum by(finish_reason) (rate(local_llm_completions_total{job=\"smollm-client\"}[$__rate_interval]))",
+                  "legendFormat": "{{finish_reason}}",
+                  "instant": false
+                }
+              ],
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 16,
+              "title": "Output capped at max_tokens",
+              "description": "Length finish reason means generation reached its output limit. This is distinct from a context-window error.",
+              "type": "timeseries",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 12,
+                "y": 30,
+                "w": 12,
+                "h": 8
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percent",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "100 * sum(rate(local_llm_completions_total{job=\"smollm-client\",finish_reason=\"length\"}[$__rate_interval])) / sum(rate(local_llm_completions_total{job=\"smollm-client\"}[$__rate_interval]))",
+                  "legendFormat": "value",
+                  "instant": false
+                }
+              ],
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 17,
+              "type": "row",
+              "title": "Tokens and inference efficiency",
+              "collapsed": false,
+              "panels": [],
+              "gridPos": {
+                "x": 0,
+                "y": 38,
+                "w": 24,
+                "h": 1
+              }
+            },
+            {
+              "id": 18,
+              "title": "Input / output token rate",
+              "description": "",
+              "type": "timeseries",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 0,
+                "y": 39,
+                "w": 12,
+                "h": 8
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "suffix:tokens/s",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum by(gen_ai_token_type) (rate(gen_ai_client_token_usage_sum{service_name=\"smollm-client\",gen_ai_request_model=\"smollm2:135m-instruct-q4_K_M\"}[$__rate_interval]))",
+                  "legendFormat": "{{gen_ai_token_type}}",
+                  "instant": false
+                }
+              ],
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 19,
+              "title": "Tokens / selected range",
+              "description": "SDK-reported usage. Cached input tokens can differ from newly evaluated prompt tokens at the server.",
+              "type": "stat",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 12,
+                "y": 39,
+                "w": 12,
+                "h": 8
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum by(gen_ai_token_type) (increase(gen_ai_client_token_usage_sum{service_name=\"smollm-client\",gen_ai_request_model=\"smollm2:135m-instruct-q4_K_M\"}[$__range]))",
+                  "legendFormat": "{{gen_ai_token_type}}",
+                  "instant": true
+                }
+              ],
+              "options": {
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "colorMode": "value",
+                "graphMode": "none",
+                "textMode": "auto"
+              }
+            },
+            {
+              "id": 20,
+              "title": "P95 tokens per request",
+              "description": "",
+              "type": "timeseries",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 0,
+                "y": 47,
+                "w": 12,
+                "h": 8
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "histogram_quantile(0.95,sum by(le) (rate(gen_ai_client_token_usage_bucket{service_name=\"smollm-client\",gen_ai_request_model=\"smollm2:135m-instruct-q4_K_M\",gen_ai_token_type=\"input\"}[$__rate_interval])))",
+                  "legendFormat": "input",
+                  "instant": false
+                },
+                {
+                  "refId": "B",
+                  "expr": "histogram_quantile(0.95,sum by(le) (rate(gen_ai_client_token_usage_bucket{service_name=\"smollm-client\",gen_ai_request_model=\"smollm2:135m-instruct-q4_K_M\",gen_ai_token_type=\"output\"}[$__rate_interval])))",
+                  "legendFormat": "output",
+                  "instant": false
+                }
+              ],
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 21,
+              "title": "Prompt cache hit fraction",
+              "description": "Cached prompt tokens / (cached + newly evaluated prompt tokens). Native server counters, weighted over the rate window.",
+              "type": "timeseries",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 12,
+                "y": 47,
+                "w": 12,
+                "h": 8
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percent",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "100 * sum(rate(llamacpp:prompt_tokens_cached_total{job=\"smollm-model\"}[$__rate_interval])) / (sum(rate(llamacpp:prompt_tokens_cached_total{job=\"smollm-model\"}[$__rate_interval])) + sum(rate(llamacpp:prompt_tokens_total{job=\"smollm-model\"}[$__rate_interval])))",
+                  "legendFormat": "value",
+                  "instant": false
+                }
+              ],
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 22,
+              "title": "Throughput while evaluating / decoding",
+              "description": "Tokens / CPU inference wall time. Excludes idle time; not equivalent to tokens per second delivered over the entire observation window.",
+              "type": "timeseries",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 0,
+                "y": 55,
+                "w": 12,
+                "h": 8
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "suffix:tokens/s",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum(rate(llamacpp:prompt_tokens_total{job=\"smollm-model\"}[$__rate_interval])) / sum(rate(llamacpp:prompt_seconds_total{job=\"smollm-model\"}[$__rate_interval]))",
+                  "legendFormat": "prefill",
+                  "instant": false
+                },
+                {
+                  "refId": "B",
+                  "expr": "sum(rate(llamacpp:tokens_predicted_total{job=\"smollm-model\"}[$__rate_interval])) / sum(rate(llamacpp:tokens_predicted_seconds_total{job=\"smollm-model\"}[$__rate_interval]))",
+                  "legendFormat": "decode",
+                  "instant": false
+                }
+              ],
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 23,
+              "title": "Mean decode time per output token",
+              "description": "Weighted server decode time / generated tokens, not a per-request latency percentile.",
+              "type": "timeseries",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 12,
+                "y": 55,
+                "w": 12,
+                "h": 8
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum(rate(llamacpp:tokens_predicted_seconds_total{job=\"smollm-model\"}[$__rate_interval])) / sum(rate(llamacpp:tokens_predicted_total{job=\"smollm-model\"}[$__rate_interval]))",
+                  "legendFormat": "value",
+                  "instant": false
+                }
+              ],
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 24,
+              "type": "row",
+              "title": "Saturation and resource pressure",
+              "collapsed": false,
+              "panels": [],
+              "gridPos": {
+                "x": 0,
+                "y": 63,
+                "w": 24,
+                "h": 1
+              }
+            },
+            {
+              "id": 25,
+              "title": "Admitted, active, and queued requests",
+              "description": "One server slot, at most two admitted requests. Gauges sampled every 15 s may miss very short queue spikes; the 429 counter does not.",
+              "type": "timeseries",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 0,
+                "y": 64,
+                "w": 12,
+                "h": 8
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "local_llm_inflight_requests{job=\"smollm-client\"}",
+                  "legendFormat": "gateway admitted",
+                  "instant": false
+                },
+                {
+                  "refId": "B",
+                  "expr": "local_llm_admission_capacity{job=\"smollm-client\"}",
+                  "legendFormat": "gateway capacity",
+                  "instant": false
+                },
+                {
+                  "refId": "C",
+                  "expr": "llamacpp:requests_processing{job=\"smollm-model\"}",
+                  "legendFormat": "server active",
+                  "instant": false
+                },
+                {
+                  "refId": "D",
+                  "expr": "llamacpp:requests_deferred{job=\"smollm-model\"}",
+                  "legendFormat": "server queue",
+                  "instant": false
+                }
+              ],
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 26,
+              "title": "Context length high-water mark / 512 tokens",
+              "description": "Highest sequence length seen since model start. This is not instantaneous KV-cache occupancy or current memory utilization.",
+              "type": "timeseries",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 12,
+                "y": 64,
+                "w": 12,
+                "h": 8
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percent",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "100 * llamacpp:n_tokens_max{job=\"smollm-model\"} / 512",
+                  "legendFormat": "value",
+                  "instant": false
+                }
+              ],
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 27,
+              "title": "CPU usage / limits",
+              "description": "Kubelet cAdvisor pod-level CPU usage, with API-reported application-container limits. Uses the pod aggregate when available to avoid double counting.",
+              "type": "timeseries",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 0,
+                "y": 72,
+                "w": 12,
+                "h": 8
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "suffix:cores",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "(sum by(pod) (rate(container_cpu_usage_seconds_total{job=\"kubelet-cadvisor\",namespace=\"ai-observability\",pod=~\"smollm-(model|client)-.*\",container=\"\"}[$__rate_interval])) or sum by(pod) (rate(container_cpu_usage_seconds_total{job=\"kubelet-cadvisor\",namespace=\"ai-observability\",pod=~\"smollm-(model|client)-.*\",container!=\"\",container!=\"POD\"}[$__rate_interval])))",
+                  "legendFormat": "{{pod}} used",
+                  "instant": false
+                },
+                {
+                  "refId": "B",
+                  "expr": "label_replace(sum by(k8s_pod_name) (k8s_container_cpu_limit{k8s_namespace_name=\"ai-observability\",k8s_pod_name=~\"smollm-(model|client)-.*\",k8s_container_name=~\"model|client\"}), \"pod\", \"$1\", \"k8s_pod_name\", \"(.*)\")",
+                  "legendFormat": "{{pod}} limit",
+                  "instant": false
+                }
+              ],
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 28,
+              "title": "Working memory / limits",
+              "description": "",
+              "type": "timeseries",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 12,
+                "y": 72,
+                "w": 12,
+                "h": 8
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "bytes",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "(sum by(pod) (container_memory_working_set_bytes{job=\"kubelet-cadvisor\",namespace=\"ai-observability\",pod=~\"smollm-(model|client)-.*\",container=\"\"}) or sum by(pod) (container_memory_working_set_bytes{job=\"kubelet-cadvisor\",namespace=\"ai-observability\",pod=~\"smollm-(model|client)-.*\",container!=\"\",container!=\"POD\"}))",
+                  "legendFormat": "{{pod}} used",
+                  "instant": false
+                },
+                {
+                  "refId": "B",
+                  "expr": "label_replace(sum by(k8s_pod_name) (k8s_container_memory_limit_bytes{k8s_namespace_name=\"ai-observability\",k8s_pod_name=~\"smollm-(model|client)-.*\",k8s_container_name=~\"model|client\"}), \"pod\", \"$1\", \"k8s_pod_name\", \"(.*)\")",
+                  "legendFormat": "{{pod}} limit",
+                  "instant": false
+                }
+              ],
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 29,
+              "title": "CPU throttled periods",
+              "description": "Throttled CFS periods / elapsed CFS periods by pod. An idle denominator yields no percentage.",
+              "type": "timeseries",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 0,
+                "y": 80,
+                "w": 12,
+                "h": 8
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percent",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "100 * (sum by(pod) (rate(container_cpu_cfs_throttled_periods_total{job=\"kubelet-cadvisor\",namespace=\"ai-observability\",pod=~\"smollm-(model|client)-.*\",container=\"\"}[$__rate_interval])) or sum by(pod) (rate(container_cpu_cfs_throttled_periods_total{job=\"kubelet-cadvisor\",namespace=\"ai-observability\",pod=~\"smollm-(model|client)-.*\",container!=\"\",container!=\"POD\"}[$__rate_interval]))) / (sum by(pod) (rate(container_cpu_cfs_periods_total{job=\"kubelet-cadvisor\",namespace=\"ai-observability\",pod=~\"smollm-(model|client)-.*\",container=\"\"}[$__rate_interval])) or sum by(pod) (rate(container_cpu_cfs_periods_total{job=\"kubelet-cadvisor\",namespace=\"ai-observability\",pod=~\"smollm-(model|client)-.*\",container!=\"\",container!=\"POD\"}[$__rate_interval])))",
+                  "legendFormat": "value",
+                  "instant": false
+                }
+              ],
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 30,
+              "title": "OOM events and container restarts",
+              "description": "Current cumulative counts. Kubernetes restart gauges can reset when pods are replaced; do not apply counter rate() semantics.",
+              "type": "timeseries",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 12,
+                "y": 80,
+                "w": 12,
+                "h": 8
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "(sum by(pod) (container_oom_events_total{job=\"kubelet-cadvisor\",namespace=\"ai-observability\",pod=~\"smollm-(model|client)-.*\",container=\"\"}) or sum by(pod) (container_oom_events_total{job=\"kubelet-cadvisor\",namespace=\"ai-observability\",pod=~\"smollm-(model|client)-.*\",container!=\"\",container!=\"POD\"}))",
+                  "legendFormat": "{{pod}} OOM events",
+                  "instant": false
+                },
+                {
+                  "refId": "B",
+                  "expr": "sum by(k8s_pod_name) (k8s_container_restarts{k8s_namespace_name=\"ai-observability\",k8s_pod_name=~\"smollm-(model|client)-.*\",k8s_container_name=~\"model|client\"})",
+                  "legendFormat": "{{k8s_pod_name}} restarts",
+                  "instant": false
+                }
+              ],
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 31,
+              "title": "Deployment desired / available replicas",
+              "description": "",
+              "type": "timeseries",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 0,
+                "y": 88,
+                "w": 12,
+                "h": 8
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "k8s_deployment_desired{k8s_deployment_name=~\"smollm-(model|client)\"}",
+                  "legendFormat": "{{k8s_deployment_name}} desired",
+                  "instant": false
+                },
+                {
+                  "refId": "B",
+                  "expr": "k8s_deployment_available{k8s_deployment_name=~\"smollm-(model|client)\"}",
+                  "legendFormat": "{{k8s_deployment_name}} available",
+                  "instant": false
+                }
+              ],
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 32,
+              "title": "Container readiness",
+              "description": "Kubernetes readiness from the existing Collector. Missing data is not treated as ready.",
+              "type": "stat",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 12,
+                "y": 88,
+                "w": 12,
+                "h": 8
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "k8s_container_ready{k8s_namespace_name=\"ai-observability\",k8s_pod_name=~\"smollm-(model|client)-.*\",k8s_container_name=~\"model|client\"}",
+                  "legendFormat": "{{k8s_pod_name}}",
+                  "instant": true
+                }
+              ],
+              "options": {
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "colorMode": "value",
+                "graphMode": "none",
+                "textMode": "auto"
+              }
+            },
+            {
+              "id": 33,
+              "type": "row",
+              "title": "Telemetry health and trace drill-down",
+              "collapsed": false,
+              "panels": [],
+              "gridPos": {
+                "x": 0,
+                "y": 96,
+                "w": 24,
+                "h": 1
+              }
+            },
+            {
+              "id": 34,
+              "title": "Scrape health",
+              "description": "Read each target separately. A down metrics pipeline can make business panels empty even while inference still works.",
+              "type": "stat",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 0,
+                "y": 97,
+                "w": 24,
+                "h": 4
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "up{job=~\"smollm-model|smollm-client|openlit|collector-internal|kubelet-cadvisor|tempo\"}",
+                  "legendFormat": "{{job}}",
+                  "instant": true
+                }
+              ],
+              "options": {
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "colorMode": "value",
+                "graphMode": "none",
+                "textMode": "auto"
+              }
+            },
+            {
+              "id": 35,
+              "title": "Collector accepted telemetry",
+              "description": "",
+              "type": "timeseries",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 0,
+                "y": 101,
+                "w": 12,
+                "h": 8
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum(rate(otelcol_receiver_accepted_spans{receiver=\"otlp\"}[$__rate_interval]))",
+                  "legendFormat": "spans / s",
+                  "instant": false
+                },
+                {
+                  "refId": "B",
+                  "expr": "sum(rate(otelcol_receiver_accepted_metric_points{receiver=\"otlp\"}[$__rate_interval]))",
+                  "legendFormat": "metric points / s",
+                  "instant": false
+                }
+              ],
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 36,
+              "title": "Collector refused or failed trace delivery",
+              "description": "Failure counters may be absent until the first failure. Use scrape health and queue gauges to distinguish uninitialized counters from a missing Collector.",
+              "type": "timeseries",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 12,
+                "y": 101,
+                "w": 12,
+                "h": 8
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum(rate(otelcol_receiver_refused_spans{receiver=\"otlp\"}[$__rate_interval]))",
+                  "legendFormat": "refused spans / s",
+                  "instant": false
+                },
+                {
+                  "refId": "B",
+                  "expr": "sum(rate(otelcol_exporter_send_failed_spans{exporter=\"otlp/tempo\"}[$__rate_interval]))",
+                  "legendFormat": "failed sends / s",
+                  "instant": false
+                },
+                {
+                  "refId": "C",
+                  "expr": "sum(rate(otelcol_exporter_enqueue_failed_spans{exporter=\"otlp/tempo\"}[$__rate_interval]))",
+                  "legendFormat": "enqueue failures / s",
+                  "instant": false
+                }
+              ],
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 37,
+              "title": "Trace exporter queue / capacity",
+              "description": "",
+              "type": "timeseries",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 0,
+                "y": 109,
+                "w": 12,
+                "h": 8
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "otelcol_exporter_queue_size{exporter=\"otlp/tempo\"}",
+                  "legendFormat": "queued batches",
+                  "instant": false
+                },
+                {
+                  "refId": "B",
+                  "expr": "otelcol_exporter_queue_capacity{exporter=\"otlp/tempo\"}",
+                  "legendFormat": "capacity",
+                  "instant": false
+                }
+              ],
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 38,
+              "title": "Tempo spans received",
+              "description": "",
+              "type": "timeseries",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ai-prometheus"
+              },
+              "gridPos": {
+                "x": 12,
+                "y": 109,
+                "w": 12,
+                "h": 8
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "suffix:spans/s",
+                  "decimals": 2,
+                  "noValue": "No samples",
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum(rate(tempo_distributor_spans_received_total[$__rate_interval]))",
+                  "legendFormat": "value",
+                  "instant": false
+                }
+              ],
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "lastNotNull"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 39,
+              "title": "Successful and failed inference traces",
+              "type": "table",
+              "datasource": {
+                "type": "tempo",
+                "uid": "ai-tempo"
+              },
+              "gridPos": {
+                "x": 0,
+                "y": 117,
+                "w": 24,
+                "h": 9
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "queryType": "traceql",
+                  "query": "{ resource.service.name = \"smollm-client\" }",
+                  "limit": 20,
+                  "tableType": "traces"
+                }
+              ],
+              "options": {
+                "showHeader": true
+              },
+              "fieldConfig": {
+                "defaults": {},
+                "overrides": []
+              }
+            },
+            {
+              "id": 40,
+              "title": "Interpretation and measurement limits",
+              "type": "text",
+              "gridPos": {
+                "x": 0,
+                "y": 126,
+                "w": 24,
+                "h": 5
+              },
+              "options": {
+                "mode": "markdown",
+                "content": "Only real local-model traffic is selected. **Idle periods:** no percentile/ratio sample is expected when there are no requests. **TTFT:** first model content chunk at the gateway; HTTP replies are buffered. **Context:** high-water mark, not live KV occupancy. **Limits:** semantic quality, correctness, electricity cost, and true live KV occupancy are not measured. No GPU is allocated and no provider invoice exists. Trace drill-down preserves model and token attributes. Thresholds are lab examples; agree SLOs and workload-specific limits before treating them as production objectives."
+              }
             }
           ],
-          "options": {
-            "showHeader": true
-          },
-          "fieldConfig": {
-            "defaults": {},
-            "overrides": []
-          }
-        },
-        {
-          "id": 40,
-          "title": "Interpretation and measurement limits",
-          "type": "text",
-          "gridPos": {
-            "x": 0,
-            "y": 126,
-            "w": 24,
-            "h": 5
-          },
-          "options": {
-            "mode": "markdown",
-            "content": "Only real local-model traffic is selected. **Idle periods:** no percentile/ratio sample is expected when there are no requests. **TTFT:** first model content chunk at the gateway; HTTP replies are buffered. **Context:** high-water mark, not live KV occupancy. **Limits:** semantic quality, correctness, electricity cost, and true live KV occupancy are not measured. No GPU is allocated and no provider invoice exists. Trace drill-down preserves model and token attributes. Thresholds are lab examples; agree SLOs and workload-specific limits before treating them as production objectives."
+          "templating": {
+            "list": []
           }
         }
-      ],
-      "templating": {
-        "list": []
-      }
-    }
 ```
 
 ```bash
@@ -3293,12 +3295,12 @@ Expect successful calls and possibly 429 responses depending on overlap. The rej
 
 ## 11. Persistence, restart, and changes
 
-| Data | PVC | Size | Retention |
-| --- | --- | --- | --- |
-| Grafana database/settings | `grafana/grafana-pvc` | 1 GiB | Until explicitly deleted |
-| Prometheus metrics | `ai-observability/prometheus` | 1 GiB | 24 hours / 512 MB TSDB cap |
-| Tempo traces | `ai-observability/tempo` | 2 GiB | 24 hours |
-| Model weights | `ai-observability/smollm-model` | 512 MiB | Reused and checksum-verified |
+| Data                      | PVC                             | Size    | Retention                    |
+| ------------------------- | ------------------------------- | ------- | ---------------------------- |
+| Grafana database/settings | `grafana/grafana-pvc`           | 1 GiB   | Until explicitly deleted     |
+| Prometheus metrics        | `ai-observability/prometheus`   | 1 GiB   | 24 hours / 512 MB TSDB cap   |
+| Tempo traces              | `ai-observability/tempo`        | 2 GiB   | 24 hours                     |
+| Model weights             | `ai-observability/smollm-model` | 512 MiB | Reused and checksum-verified |
 
 Normal restart:
 
@@ -3343,18 +3345,18 @@ kubectl --context "$CLUSTER" -n ai-observability scale \
 
 ## 12. Operational response guide
 
-| Symptom | Investigation / response |
-| --- | --- |
-| Model/client scrape down | Inspect deployment availability, readiness, pod events; restart port forwards after a pod replacement |
-| TTFT rising, decode steady | Check server deferred requests, gateway admission, prefill throughput and cache hit fraction; distinguish queue pressure from prompt work |
-| Decode throughput drops | Check CPU usage versus limits and CFS throttling; compare token lengths before increasing resources |
-| HTTP 429 rising | Admission is full; reduce caller concurrency or intentionally change capacity/slots after checking CPU and memory headroom |
-| HTTP 400 / 413 rising | Check prompt/body limits and 512-token context; these are validation failures, not server availability failures |
-| Output capped at max_tokens | Check `length` finish fraction and output-token distribution; the lab permits 1–64 generated tokens |
-| Memory near limit / OOM / restarts | Inspect pod termination reasons; correlate context/concurrency with working memory before increasing the limit |
-| Missing metrics while inference succeeds | Check gateway scrape, `openlit` scrape, injection bootstrap, collector OTLP accepted metrics, and kubelet RBAC errors |
-| Missing traces while metrics exist | Check refused spans, exporter enqueue/send failures, queue/capacity, and Tempo scrape/ingest; inspect Collector/Tempo logs |
-| First installation stuck | Inspect model download checksum/network access, ServiceAccount/RBAC creation, and PVC binding |
+| Symptom                                  | Investigation / response                                                                                                                  |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Model/client scrape down                 | Inspect deployment availability, readiness, pod events; restart port forwards after a pod replacement                                     |
+| TTFT rising, decode steady               | Check server deferred requests, gateway admission, prefill throughput and cache hit fraction; distinguish queue pressure from prompt work |
+| Decode throughput drops                  | Check CPU usage versus limits and CFS throttling; compare token lengths before increasing resources                                       |
+| HTTP 429 rising                          | Admission is full; reduce caller concurrency or intentionally change capacity/slots after checking CPU and memory headroom                |
+| HTTP 400 / 413 rising                    | Check prompt/body limits and 512-token context; these are validation failures, not server availability failures                           |
+| Output capped at max_tokens              | Check `length` finish fraction and output-token distribution; the lab permits 1–64 generated tokens                                       |
+| Memory near limit / OOM / restarts       | Inspect pod termination reasons; correlate context/concurrency with working memory before increasing the limit                            |
+| Missing metrics while inference succeeds | Check gateway scrape, `openlit` scrape, injection bootstrap, collector OTLP accepted metrics, and kubelet RBAC errors                     |
+| Missing traces while metrics exist       | Check refused spans, exporter enqueue/send failures, queue/capacity, and Tempo scrape/ingest; inspect Collector/Tempo logs                |
+| First installation stuck                 | Inspect model download checksum/network access, ServiceAccount/RBAC creation, and PVC binding                                             |
 
 Useful commands:
 
