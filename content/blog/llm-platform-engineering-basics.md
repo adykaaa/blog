@@ -131,7 +131,7 @@ black box of magic and a lots of maths
 generated output (The weather is sunny in Hungary, yo!)
 ```
 
-That whole process of running the trained model to produce an output is called inference.
+The whole process of running the trained model to produce an output is called inference.
 
 **Takeaway**: The word **inference** refers to the process of actually running the model and getting the output based on the inputs.
 
