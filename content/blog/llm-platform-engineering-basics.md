@@ -113,7 +113,7 @@ Now that we know why GPUs are used to run LLMs and we know that a model is nothi
 
 #### Tokenization and Embeddings
 
-Tokenization is the process of splitting the input text (aka. your prompt) into smaller units called _tokens_ which are then converted into simple numbers. Let's see it in an example where we'll see the token representations of the prompt _"Hello, how are you?"_.
+**Tokenization** is the process of splitting the input text (aka. your prompt) into smaller units called _tokens_ which are then converted into simple numbers. Let's see it in an example where we'll see the token representations of the prompt _"Hello, how are you?"_.
 
 Install the transformers Python package:
 
@@ -157,7 +157,7 @@ you -> 498
 ? -> 30
 ```
 
-Great but what now, you might ask. Well the model cannot really do anything with these integer numbers -- remember how everything in a model is represented as matrices (**n-dimensional matrices aka. tensors**). So now comes the _embedding_ part.
+Great but what now, you might ask. Well the model cannot really do anything with these integer numbers -- remember how everything in a model is represented as matrices (**n-dimensional matrices aka. tensors**). So now comes the **embedding** part.
 The models all have a big **table** where each ID is mapped to an **embedding vector**. For example if the model uses embeddings with 4 dimensions (_the number of dimensions for these embeddings are different for models, e.g for Qwen2.5-0.5B the hidden dimension is 896, so these tokens are represented by 896 dimensional tensors, not just 4 like in the below example_):
 
 ```text
@@ -171,11 +171,13 @@ This **embedding table is part of the model's learned weights**, so it is anothe
 
 Now our token IDs have become vectors that the transformer layers can process. Wooohoo! But **the lookup itself doesn't account for context yet**. For example, if `bank` has the same token ID in "river bank" and "bank account", it starts with the same embedding vector in both. The transformer layers then use the surrounding tokens to build different, context-dependent representations. We don't need to dive deeper into that, but it's good to know.
 
+![Tokenization and Embedding](/blog/images/llm-platform-engineering-overview/tokenization-embedding.png)
+
 The embedding table takes up some memory as well. [Qwen2.5-0.5B's configuration](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct/blob/main/config.json) specifies **151,936** vocabulary entries and **896** dimensions. That's `151,936 × 896 = 136,134,656` parameters -- roughly **260 MiB at two bytes per parameter**, just for the input embedding table!
 
 (NOTE: you'll also hear about **embeddings for semantic search and RAG**. Here we're talking about the LLM's **internal, per-token embedding lookup**. Search systems typically use an embedding model to produce a vector representing a whole query or text chunk, which can then be compared with other vectors.)
 
-One last thing to mention about **tokenization** is that usually this is done by the **CPU**. If we think back to the first point about why GPUs are used for LLMs, we've learnt that because they are really good at executing billions of **simple operations** like matrix multiplication and simple math stuff in parallel. However in the process of tokenization, there are a lot of lookups, string manipulations, branching, etc. -- so **complex operations which the CPU is awesome at!**.
+One last thing to mention about **tokenization** is that usually this is done by the **CPU**. If we think back to the first point about why GPUs are used for LLMs, we've learnt that because they are really good at executing billions of **simple operations** like matrix multiplication and simple math stuff in parallel. However in the process of tokenization, there are a lot of lookups, string manipulations, branching, etc. -- so **complex operations which the CPU is awesome at**.
 
 On a very oversimplified level the flow is something like:
 
