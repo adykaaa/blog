@@ -54,7 +54,7 @@ LLM stands for Large Language **Model** so it would be great to understand what 
 
 ## Inside the model file
 
-Let's look at the files for [SmolLM2 with 135 million parameters](https://huggingface.co/HuggingFaceTB/SmolLM2-135M/tree/main) (we could look at any other model, I chose this one for an example). As we can see there are a few configuration files, and one bigger file called **model.safetensors**:
+Let's look at the files for the [SmolLM2 with 135 million parameters](https://huggingface.co/HuggingFaceTB/SmolLM2-135M/tree/main) model (we could look at any other model, I chose this one for an example). As we can see there are a few configuration files, and one bigger file called **model.safetensors**:
 
 ![LLM files on HuggingFace](/blog/images/llm-platform-engineering-overview/smollm2.png)
 
