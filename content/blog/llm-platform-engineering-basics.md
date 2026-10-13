@@ -10,7 +10,7 @@ toc: true
 
 ## Intro
 
-LLM Inference Platform Engineering is an area that is becoming increasingly popular due to the widespread use of LLMs everywhere. If we think about it, it makes perfect sense: you are not writing code by hand anymore, are you? :)
+LLM (Inference) Platform Engineering is an area that is becoming increasingly popular due to the widespread use of LLMs everywhere. If we think about it, it makes perfect sense: you are not writing code by hand anymore, are you? :)
 However, the LLM you prompt to design a rocket ship and tell "should not make mistakes pls" needs to **run somewhere**. Today, 99% of the time, you don't care where; you just fire up Claude or the latest version of ChatGPT, which reads your prompt, waits a bit, and spits out the answer -- so you might ask: why would I even need to understand this?
 
 The answer is simple: **this is not going to stay like this for long**. If you are working as part of an organization (mid-sized or big), you might have gone through the following stages (flawlessly communicated by your leadership, obviously):
@@ -31,8 +31,8 @@ Let's begin.
 
 ## Why are GPUs all the rage now?
 
-As far as raw resources are concerned, we've only had to deal with disk, CPU, and memory. Disk space has been a non-factor for a long time because SSDs and HDDs have become dirt cheap. Memory and CPU, on the other hand have always been considered precious resources, so our focus has been on these two.
-We know that computation happens on the CPU -- so why on earth can't we keep using it for inference workloads? Those require computation, just like the server running my awesome backend rewritten in Rust, right? Well no.
+As far as raw resources are concerned, we've only had to deal with disk, CPU, and memory. Disk space has been a non-factor for a long time because SSDs and HDDs have become dirt cheap. Memory and CPU, on the other hand have always been considered precious resources, so our focus has been on these two -- however all you keep hearing about is how expensive GPUs are because of AI.
+We know that computation happens on the CPU -- so why on earth can't we keep using it for LLM workloads? Those require computation, just like the server running my awesome backend rewritten in Rust, right? Well no.
 
 ![CPU vs GPU architecture](/blog/images/llm-platform-engineering-overview/gpu-vs-cpu-blog.jpg)
 
@@ -117,7 +117,7 @@ Now that we know why GPUs are used to run LLMs and we know that a model is nothi
 
 ### Inference
 
-Whenever I saw the word **inference** I couldn't really tell what this really meant in the context of LLMs (maybe because I'm not a native english speaker, so it didn't really come across as self-explanatory). "During inference, the model does XYZ...." great but what the heck is inference? The definition of **infer** is to derive or conclude something from available information. When we talk about model inference, we talk about the whole process of feeding an **input** to a **model** so that it can use its **weights** it has learned during training to **infer** the output.
+You will come across the word **inference** a lot, so it's good to know what it actualy means. The definition of **infer** is to derive or conclude something from available information. When we talk about **LLM inference**, we talk about the whole process of feeding an **input** to a **model** so that it can use its **weights** it has learned during training to **infer** the output.
 
 When we prompt the LLM with
 
@@ -239,5 +239,3 @@ the word `bank` will go through the **tokenizer** and produce the same integer *
 At a high level, attention lets each token look at the other tokens in our prompts and decide how relevant they are when building its next representation.
 
 ### Prefill
-
-Now that we know why we need to use GPUs, what a model is, and our prompt is tokenized + converted into vectors, it's time to pull out the big guns and start processing (this is partly true btw -- from the above section, when the token IDs are copied over to the GPU, and the embedding layer looks up the vector representation for a computed token number, that happens during this phase we are about to describe called **prefill**).
