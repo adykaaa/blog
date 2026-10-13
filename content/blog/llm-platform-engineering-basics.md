@@ -103,7 +103,7 @@ tensor([[-0.0894,  0.1367, -0.1045,  ...,  0.4727,  0.4492,  0.1924],
        dtype=torch.bfloat16)
 ```
 
-If you expected to see a lot of interesting stuff inside the model code, now you must be disappointed -- **it's just a bunch of numbers**! These are the numbers that are learned via [model training](https://www.ibm.com/think/topics/llm-training) that define how a certain input will produce the required output:
+If you expected to see a lot of interesting stuff inside the model code, now you must be disappointed -- **it's just a bunch of numbers**! These are the numbers that are learned via [model training](https://www.ibm.com/think/topics/llm-training) that define how a certain input will produce the required output. One thing to note is that each **layer** performs a lot of calculations, and then passes the result of the calculation to the next layer.
 
 ![Overly-simplified way of looking at models](/blog/images/llm-platform-engineering-overview/simplified-overview-model.png)
 
@@ -266,9 +266,54 @@ Take me to the nearest OTP bank.
 
 the token of `nearest` only has attention scores for the token representations of `["Take", "me", "to", "the", "nearest"]` but not `bank`. This is called _causal self-attention_. There are many other types of attention mechanisms, if you are interested read it here: [link](https://www.turingpost.com/p/attention-types)
 
-Obviously not only the token `bank` has attention scores tho -- every token performs attention, thus every token has attention scores. The question is: how does the model actually decide which tokens are **relevant** to other tokens? How does it know that `OTP` and `river` are the most relevant tokens in our prompts to the token `bank`?
+Obviously not only the token `bank` has attention scores tho -- every token performs attention, thus every token has attention scores. The question is: how does the model actually decide which tokens are **relevant** to other tokens? How does it know that `OTP` and `river` are the most relevant tokens in our prompts to the token `bank`? How does it calculate **the attention scores**?
 This is where `Query (Q)`, `Key (K)`, and `Value (V)` come into the picture, which we will discuss in the next section.
 
 **Takeaway**: Attention is the mechanism that allows tokens to look at other tokens and figure out which ones are relevant. This is how the model can start with the exact same embedding for the token `bank`, but end up with a completely different representation depending on whether we're talking about an `OTP bank` or a `river bank`.
 
-### Query, Key, Value
+### Query, Key, Value (Q, K, V)
+
+You'll constantly come across these three when learning about **attention** and LLMs in general. Later on we'll have a dedicated section on one of the most integral parts of the LLM workflow called the **KV cache** that you'll spend a lot of time understanding, optimizing, and monitoring. Before that, wouldn't it be cool to understand what the `K` and `V`˙˙are in `KV Cache`?
+
+Remember our tensor that we printed using Python in the earlier section about **Tokenization and Embeddings**?
+
+```text
+model.layers.0.self_attn.q_proj.weight
+shape: torch.Size([576, 576])
+```
+
+From the first line, we can understand a few things already:
+
+- `model` refers to the LLM model.
+- `layer` refers to a layer of matrix computations. Models have many layers, generally bigger models have more.
+- `0` is the index of the layer.
+- `self_attn` means self-attention, which we discussed in the previous section -- a mechanism to score how much attention a token should pay towards the other tokens
+- `weights` are the numbers the model learned during training. It uses them in matrix computations to transform one vector into another.
+
+But what is `q_proj`? Stay tuned to find out.
+
+If we take a look at the inside of the `model.safetensors` file again, we can see that in the `layers` there are `k`, `q`, `v`, and `o` projection weights:
+
+![K,Q,V,O proj. weights](/blog/images/llm-platform-engineering-overview/koqv-proj.png)
+
+so these must mean something.
+
+Taking a step back, the **checkpoint** we are at right now in our learning journey looks like this roughly:
+
+0. you know GPUs are da bomb for performing calculations for LLMs due to their architecture, you also know that a model is nothing but a bunch of tensors
+1. you prompt the LLM `Take me to the nearest OTP bank.`
+2. your prompt is converted into **tokens**
+3. the model looks up the **embedding vectors** for the tokens
+   (bonus: you have learned about **attention** and **attention scores**, but you have no idea how they come to the picture yet)
+
+When a token reaches an **attention layer**, it's current vector representation is multiplied by these 3 `q_proj`, `k_proj`, and `v_proj` matrices to produce three new vectors, and this keeps happening until the model reaches the last layer where it will produce the required output:
+
+![K,Q,V layers](/blog/images/llm-platform-engineering-overview/q-k-v-layers.png)
+
+So what is K,Q,V? An overly simplified way of thinking about them is:
+
+```text
+Query = What am I looking for?
+Key   = What kind of information do I contain?
+Value = What information should I give you if you decide I'm relevant?
+```
