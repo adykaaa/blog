@@ -266,9 +266,9 @@ Take me to the nearest OTP bank.
 
 the token of `nearest` only has attention scores for the token representations of `["Take", "me", "to", "the", "nearest"]` but not `bank`. This is called _causal self-attention_. There are many other types of attention mechanisms, if you are interested read it here: [link](https://www.turingpost.com/p/attention-types)
 
-Obviously not only the token `bank` has attention scores -- every token performs attention, thus every token has attention scores. The question is: how does the model actually decide which tokens are **relevant** to other tokens? How does it know that `OTP` and `river` are the most relevant tokens in our prompts to the token `bank`?
+Obviously not only the token `bank` has attention scores tho -- every token performs attention, thus every token has attention scores. The question is: how does the model actually decide which tokens are **relevant** to other tokens? How does it know that `OTP` and `river` are the most relevant tokens in our prompts to the token `bank`?
 This is where `Query (Q)`, `Key (K)`, and `Value (V)` come into the picture, which we will discuss in the next section.
 
 **Takeaway**: Attention is the mechanism that allows tokens to look at other tokens and figure out which ones are relevant. This is how the model can start with the exact same embedding for the token `bank`, but end up with a completely different representation depending on whether we're talking about an `OTP bank` or a `river bank`.
 
-### Prefill
+### Query, Key, Value
