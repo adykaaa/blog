@@ -23,9 +23,11 @@ The answer is simple: **this is not going to stay like this for long**. If you a
 6. **Stage 6:** OMG, this is really expensive, we are limiting everyone to X dollars per month (where X gets spent in a week)!
 7. **Stage 7:** Couldn't we just host it ourselves using open-source models and "only pay for the infra"?
 
-Stage 7 might have to wait a bit for a few companies -- but I have a really strong hunch that this is going to be the case for most, and we want to be ready. This series is intended to cover my understanding of the current landscape and to solidify some of what I've learned. The thing that's hard about this in general is the fact that as platform engineers, we have to understand **so much stuff**, and now there's a whole new area we need to dig into. Remember how long it took us to be comfortable with K8s? Now your `HTTPRoute` setup for your Gateway API implementation is useless, your `HPA` scaling based on memory/CPU utilization can be thrown out of the window, you'll come across new K8s terminology like `LeaderWorkerSet` and `DisaggregatedSet`, traditional service meshes won't help you, and you'll come across a ton of new metrics (related to GPU) that will be the heart of operating LLMs. TL;DR: a fun journey lies ahead!
+Stage 7 might have to wait a bit for a few companies -- but I have a really strong hunch that this is going to be the case for most, and we want to be ready. This series is intended to cover my understanding of the current landscape and to solidify some of what I've learned. The thing that's hard about this in general is the fact that as platform engineers, we have to understand **so much stuff**, and now there's a whole new area we need to dig into. Remember how long it took us to be comfortable with K8s? Now your `HTTPRoute` setup for your Gateway API implementation is useless, your `HPA` scaling based on memory/CPU utilization can be thrown out of the window, you'll come across new K8s terminology like `LeaderWorkerSet` and `DisaggregatedSet`, traditional service meshes won't help you, and you'll come across a ton of new metrics (related to GPU) that will be the heart of operating LLMs. TL:DR a fun journey lies ahead!
 
-NOTE: This particular article is going to be a bit dense and won't contain many follow-along examples, but the truth is that we must understand many things about LLM architecture well enough (_as platform engineers we don't really care about the underlying math of the models, SoftMax functions, tensor transformations and so on_) to be able to reason about operating + debugging + observing + serving them.
+NOTE: This particular article is going to be a bit dense and theory heavy, but the truth is that we must understand many things about LLM architecture well enough (_as platform engineers we don't really care about the underlying math of the models, SoftMax functions, tensor transformations and so on_) to be able to reason about operating + debugging + observing + serving them. Showcasing the surprised Pikachu face when someone talks about foundational concepts related to LLMs wouldn't really sell you as the best AI platform engineer now, would it?
+
+Let's begin.
 
 ## Why are GPUs all the rage now?
 
@@ -133,13 +135,15 @@ black box of magic and a lots of maths
 generated output (The weather is sunny in Hungary, yo!)
 ```
 
-The whole process of running the trained model to produce an output is called inference.
+The whole process of running the trained model to produce an output is called **inference**. We will dive deeper into the important parts, but one of the points I'd like to get across before diving deeper is that LLMs are nothing more than **word predictor machines**. You give it a prompt, the prompt goes through the black box of magic calculations, then based on which word has the highest percentage of being the right next word in the output - _based on context and a bunch of calculations_ - will appear in the LLMs streamed answer.
 
-**Takeaway**: The word **inference** refers to the process of actually running the model and getting the output based on the inputs.
+**Takeaway**: The word **inference** refers to the process of actually running the model and getting the output based on the inputs. LLMs are not magic, they are predictor machines.
 
 ### Tokenization and Embeddings
 
-**Tokenization** is the process of splitting the input text (aka. your prompt) into smaller units called _tokens_ which are then converted into simple numbers. Let's see it in an example where we'll see the token representations of the prompt _"Hello, how are you?"_.
+**Tokenization** is the process of splitting the input text (aka. your prompt) into smaller units called _tokens_ which are then converted into simple numbers. LLMs cannot work on strings because they have variable lengths, discrete symbols, and they have no useful representation in maths -- which we know is desperately needed because in LLM land everything is about matrices.
+
+So let's see it via an example how our prompts are turned into tokens with our simple prompt _"Hello, how are you?"_.
 
 Install the transformers Python package:
 
@@ -183,7 +187,7 @@ you -> 498
 ? -> 30
 ```
 
-Great but what now, you might ask. Well the model cannot really do anything with these integer numbers -- remember how everything in a model is represented as matrices (**n-dimensional matrices aka. tensors**). So now comes the **embedding** part.
+Great but what now, you might ask. Well the model cannot really do anything with the above integer numbers -- remember how everything in a model is represented as matrices (**n-dimensional matrices aka. tensors**). So now comes the **Embedding** part.
 The models all have a big **table** where each ID is mapped to an **embedding vector**. For example if the model uses embeddings with 4 dimensions (_the number of dimensions for these embeddings are different for models, e.g for Qwen2.5-0.5B the hidden dimension is 896, so these tokens are represented by 896 dimensional tensors, not just 4 like in the below example_):
 
 ```text
@@ -193,19 +197,18 @@ The models all have a big **table** where each ID is mapped to an **embedding ve
 498 → [ 0.1,  0.3,  0.7, -0.6 ]   # you's embedding vector
 ```
 
-This **embedding table is part of the model's learned weights**, so it is another tensor inside the `model.safetensors` file we looked at earlier. Its shape is `[vocabulary size, embedding dimension]`: one row for each token ID, with each row containing that token's vector. Training learns these numbers, during **inference** the embedding layer just looks up the rows for our input tokens.
-
-Now our token IDs have become vectors that the transformer layers can process. Wooohoo! But **the lookup itself doesn't account for context yet**. For example, if `bank` has the same token ID in "river bank" and "bank account", it starts with the same embedding vector in both. The transformer layers then **use the surrounding tokens to build different, context-dependent representations**. We don't need to dive deeper into that, but it's good to know.
+This **embedding table is part of the model's learned weights**, so it is just another tensor inside the `model.safetensors` file we looked at earlier. Its shape is `[vocabulary size, embedding dimension]`: one row for each token ID, with each row containing that token's vector. Training learns these numbers, during **inference** the embedding layer just looks up the rows for our input tokens to get their vector representations.
 
 ![Tokenization and Embedding](/blog/images/llm-platform-engineering-overview/tokenization-embedding.png)
 
-The embedding table takes up some memory as well. [Qwen2.5-0.5B's configuration](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct/blob/main/config.json) specifies **151,936** vocabulary entries and **896** dimensions. That's `151,936 × 896 = 136,134,656` parameters -- roughly **260 MiB at two bytes per parameter**, just for the input embedding table!
+FTR, the embedding table takes up some memory as well. [Qwen2.5-0.5B's configuration](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct/blob/main/config.json) specifies **151,936** vocabulary entries and **896** dimensions. That's `151,936 × 896 = 136,134,656` parameters -- roughly **260 MiB at two bytes per parameter**, just for the input embedding table!
 
 (NOTE: you'll also hear about **embeddings for semantic search and RAG**. Here we're talking about the LLM's **internal, per-token embedding lookup**. Search systems typically use an embedding model to produce a vector representing a whole query or text chunk, which can then be compared with other vectors.)
 
-One last thing to mention about **tokenization** is that usually this is done by the **CPU**. If we think back to the first point about why GPUs are used for LLMs, we've learnt that because they are really good at executing billions of **simple operations** like matrix multiplication and simple math stuff in parallel. However in the process of tokenization, there are a lot of lookups, string manipulations, branching, etc. -- so **complex operations which the CPU is awesome at**.
+One thing to mention about **tokenization** is that usually this is done by the **CPU**. If we think back to the first point about why GPUs are used for LLMs, we've learnt that because they are really good at executing billions of **simple operations** like matrix multiplication and simple math stuff in parallel. However in the process of tokenization, there are a lot of lookups, string manipulations, branching, etc. -- so **complex operations which the CPU is awesome at**.
+(There are some cases when tokenization is run on the GPU, when dealing with massive scale. For example NVIDIA has released some tokenizers that run on GPUs, if you are interested go ahead and research it, but you'll most likely deal with tokenization on the CPU.)
 
-On a very oversimplified level the flow is something like:
+On a very oversimplified level the **flow** is something like:
 
 ```text
 input text -> tokenizer (CPU runs it) -> token IDs [9707, 11, 1246, 525, 498, 30]
@@ -213,8 +216,28 @@ input text -> tokenizer (CPU runs it) -> token IDs [9707, 11, 1246, 525, 498, 30
 -> transformer layers start the work
 ```
 
-There are some cases when tokenization is run on the GPU as well, when dealing with massive scale. For example NVIDIA has released some tokenizers that run on GPUs, if you are interested go ahead and research it.
+**Takeaway**: Tokenization is the process where your prompt for the LLM is turned into simple numbers (work done by the CPU). Embedding is where these numbers' vector representation is looked up in vector embedding matrices inside the model (on the GPU) that the LLM can finally start working with in the transformer layers.
 
-**Takeaway**: Tokenization is the process where your prompt for the LLM is turned into simple numbers (work done by the CPU). Embedding is where these numbers' vector representation is looked up in vector embedding matrices inside the model (GPU) that the LLM can finally work with.
+### Attention
+
+So, now our prompt has become token **ID**s via tokenization, which then became vectors via **embedding lookups**. However, if you take a look at the above section there's a slight problem related to maths and how words can represent different meanings based on context. **Embedding doesn't account for context**.
+
+If we take a look at this prompt:
+
+```text
+Take me to the nearest OTP bank.
+```
+
+and this one:
+
+```text
+Which river bank is the widest in Hungary?
+```
+
+the word `bank` will go through the **tokenizer** and produce the same integer **ID**, thus will have the same **embedding vector** representations -- but the meaning of the word `bank` is completely different based on which sentence we use it in -- so LLMs need a mechanism to know the **meaning** of the word based on the **context**. This mechanism is called **attention**.
+
+At a high level, attention lets each token look at the other tokens in our prompts and decide how relevant they are when building its next representation.
 
 ### Prefill
+
+Now that we know why we need to use GPUs, what a model is, and our prompt is tokenized + converted into vectors, it's time to pull out the big guns and start processing (this is partly true btw -- from the above section, when the token IDs are copied over to the GPU, and the embedding layer looks up the vector representation for a computed token number, that happens during this phase we are about to describe called **prefill**).
