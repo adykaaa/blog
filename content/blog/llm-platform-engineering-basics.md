@@ -107,7 +107,7 @@ If you expected to see a lot of interesting stuff inside the model code, now you
 
 ![Overly-simplified way of looking at models](/blog/images/llm-platform-engineering-overview/simplified-overview-model.png)
 
-**Takeaway**: A model is nothing but a **file** which contains a bunch of numbers in N-dimensional arrays. These numbers were learned via model training, and are applied to your input to produce the correct output. We use HuggingFace for storing, distributing and downloading models (we can also store these locally in _PersistentVolumes_ or in cloud object stores), and these models use the .safetensors extension.
+**Takeaway**: A model is nothing but a **file** which contains a bunch of numbers in N-dimensional matrices aka. **tensors**. These numbers were learned via model training, and are applied to your input to produce the correct output. We use HuggingFace for storing, distributing and downloading models (we can also store these locally in _PersistentVolumes_ or in cloud object stores btw), and these models use the `.safetensors` extension.
 
 ## LLM flow high-level overview
 
@@ -135,9 +135,9 @@ black box of magic and a lots of maths
 generated output (The weather is sunny in Hungary, yo!)
 ```
 
-The whole process of running the trained model to produce an output is called **inference**. We will dive deeper into the important parts, but one of the points I'd like to get across before diving deeper is that LLMs are nothing more than **word predictor machines**. You give it a prompt, the prompt goes through the black box of magic calculations, then based on which word has the highest percentage of being the right next word in the output - _based on context and a bunch of calculations_ - will appear in the LLMs streamed answer.
+The whole process of running the trained model to produce an output is called **inference**. We will dive deeper into the important parts, but one of the points I'd like to get across before diving deeper is that LLMs are nothing more than **word predictor machines**. You give it a prompt, the prompt goes through the black box of magic calculations, then based on which word has the highest percentage of being the right next word in the output - _based on context and a bunch of calculations_ - will appear in the LLM's streamed answer.
 
-**Takeaway**: The word **inference** refers to the process of actually running the model and getting the output based on the inputs. LLMs are not magic, they are predictor machines.
+**Takeaway**: The word **inference** refers to the process of actually running the model and getting the output based on the inputs. LLMs are not magic, they are word predictor machines.
 
 ### Tokenization and Embeddings
 
@@ -293,10 +293,8 @@ From the first line, we can understand a few things already:
 - `model` refers to the LLM model.
 - `layer` refers to a layer of matrix computations. Models have many layers, generally bigger models have more.
 - `0` is the index of the layer.
-- `self_attn` means self-attention, which we discussed in the previous section -- a mechanism to score how much attention a token should pay towards the other tokens
-- `weights` are the numbers the model learned during training. It uses them in matrix computations to transform one vector into another.
-
-But what is `q_proj`? Stay tuned to find out.
+- `self_attn` means self-attention, which we discussed in the previous section
+- `weights` are the numbers the model learned during training - it uses them in matrix computations to transform one vector into another.
 
 If we take a look at the inside of the `model.safetensors` file again, we can see that in the `layers` there are `k`, `q`, `v`, and `o` projection weights:
 
@@ -305,7 +303,7 @@ If we take a look at the inside of the `model.safetensors` file again, we can se
 but what the heck are these?
 
 Recall that in our section about **attention** we have a picture that shows attention **scores** for each token, which represent how relevant each token is in forming an understanding and building the **context-dependent** representation of another token (e.g `OTP` has a really high attention score for the token `bank`), but we don't really know **how** that score is calculated.
-The secret is that when each token arrives in the model, and has gone through the embedding phase (aka. they are turned into vectors) they are modified by the values of `K`,`Q`, and `V`.
+The secret is that when each token arrives in the model, and has gone through the embedding phase (aka. they are turned into vectors) they are modified by the values of `K`,`Q`, and `V` which produce an output `O` that is passed to the next layer, and this keeps happening until the token reaches the final layer.
 
 So what is `K`,`Q`,`V`? An overly simplified way of thinking about them is:
 
