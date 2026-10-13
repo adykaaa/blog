@@ -273,9 +273,15 @@ This is where `Query (Q)`, `Key (K)`, and `Value (V)` come into the picture, whi
 
 ### Query, Key, Value (Q, K, V)
 
-You'll constantly come across these three when learning about **attention** and LLMs in general. Later on we'll have a dedicated section on one of the most integral parts of the LLM workflow called the **KV cache** that you'll spend a lot of time understanding, optimizing, and monitoring. Before that, wouldn't it be cool to understand what the `K` and `V`˙˙are in `KV Cache`?
+Before we move on, the **checkpoint** we are at right now in our learning journey looks like this roughly:
 
-Remember our tensor that we printed using Python in the earlier section about **Tokenization and Embeddings**?
+0. you know **GPUs** are da bomb for performing calculations for LLMs due to their architecture, you also know that a **model** is nothing but a bunch of tensors
+1. you prompt the LLM `Take me to the nearest OTP bank.`
+2. your prompt is converted into **tokens**
+3. the model looks up the **embedding vectors** for the tokens so it can start performing calculations in layers
+4. you have learned about **attention** and **attention scores**, but you have no idea how they come to the picture yet
+
+Remember our tensor that we printed using Python in the earlier section about **Tokenization and Embeddings** from inside of the model?
 
 ```text
 model.layers.0.self_attn.q_proj.weight
@@ -296,24 +302,19 @@ If we take a look at the inside of the `model.safetensors` file again, we can se
 
 ![K,Q,V,O proj. weights](/blog/images/llm-platform-engineering-overview/koqv-proj.png)
 
-so these must mean something.
+but what the heck are these?
 
-Taking a step back, the **checkpoint** we are at right now in our learning journey looks like this roughly:
+Recall that in our section about **attention** we have a picture that shows attention **scores** for each token, which represent how relevant each token is in forming an understanding and building the **context-dependent** representation of another token (e.g `OTP` has a really high attention score for the token `bank`), but we don't really know **how** that score is calculated.
+The secret is that when each token arrives in the model, and has gone through the embedding phase (aka. they are turned into vectors) they are modified by the values of `K`,`Q`, and `V`.
 
-0. you know GPUs are da bomb for performing calculations for LLMs due to their architecture, you also know that a model is nothing but a bunch of tensors
-1. you prompt the LLM `Take me to the nearest OTP bank.`
-2. your prompt is converted into **tokens**
-3. the model looks up the **embedding vectors** for the tokens
-   (bonus: you have learned about **attention** and **attention scores**, but you have no idea how they come to the picture yet)
-
-When a token reaches an **attention layer**, it's current vector representation is multiplied by these 3 `q_proj`, `k_proj`, and `v_proj` matrices to produce three new vectors, and this keeps happening until the model reaches the last layer where it will produce the required output:
-
-![K,Q,V layers](/blog/images/llm-platform-engineering-overview/q-k-v-layers.png)
-
-So what is K,Q,V? An overly simplified way of thinking about them is:
+So what is `K`,`Q`,`V`? An overly simplified way of thinking about them is:
 
 ```text
-Query = What am I looking for?
-Key   = What kind of information do I contain?
-Value = What information should I give you if you decide I'm relevant?
+Query = What information am I looking for in other tokens?
+Key   = What kind of information do I contain? (What info do I contain that might match other tokens' Querys?)
+Value = What information do I contribute if another token finds me relevant?
 ```
+
+the values of Q, K, and V are contained in the model and **have been learned via model training**. What we need to know is that these all represent information about a particular token.
+
+![K,Q,V layers](/blog/images/llm-platform-engineering-overview/q-k-v-layers.png)
