@@ -231,11 +231,44 @@ Take me to the nearest OTP bank.
 and this one:
 
 ```text
-Which river bank is the widest in Hungary?
+We sat down next to the river bank.
 ```
 
 the word `bank` will go through the **tokenizer** and produce the same integer **ID**, thus will have the same **embedding vector** representations -- but the meaning of the word `bank` is completely different based on which sentence we use it in -- so LLMs need a mechanism to know the **meaning** of the word based on the **context**. This mechanism is called **attention**.
 
-At a high level, attention lets each token look at the other tokens in our prompts and decide how relevant they are when building its next representation.
+At a high level, attention lets **each token** look at the **other tokens** in our prompts and decide how relevant they are when building its next representation. Let's use our bank example again (_this article is quickly becoming an OTP ad, unfortunately I'm not sponsored by them..._):
+
+```text
+Take me to the nearest OTP bank.
+```
+
+When the model is processing `bank` not every previous token is equally useful. `OTP` is probably very important because it gives us a strong hint about what kind of bank we're talking about. `Take` or `me` or `.` matters less for understanding the meaning of `bank` itself.
+
+The model assigns a **score** to every token:
+
+![OTP bank attention example](/blog/images/llm-platform-engineering-overview/otp-bank-att-scores.png)
+
+these numbers are called **attention scores** that describe how much **attention** the token `bank` should pay to the **other tokens** to be able to correctly figure out the meaning of the word `bank` in the current context. On the example picture above we can see that the model decided to give the highest attention score to OTP for the word `bank`.
+
+Comparing this with the `We sat down next to the river bank` prompt, it would be something along the lines of:
+
+![River bank attention example](/blog/images/llm-platform-engineering-overview/river-bank-att-scores.png)
+
+The embedding lookup for `bank` starts from the same place and gets the same embedding vector as it did for the OTP bank example, but now tokens like `river` become much more relevant as its attention score is the highest. Through **attention** the model can build a completely different context-dependent representation of the same token.
+
+The important part is that attention isn't some **magical** lookup table saying "OTP bank means a financial institution". The **model** isn't consciously reading the sentence and reasoning about which words look important, because everything is still **vectors and matrix multiplications**. The **model has learned** numerical patterns (during **training**) that tell it which token representations are useful to one another. Remember how in the small section about the meaning of **Inference** we have learned that models are just predictor machines without magic? :)
+
+In the decoder-only LLMs we care about here, **each token can attend to itself and the tokens that came before it** but not to future tokens. So in
+
+```text
+Take me to the nearest OTP bank.
+```
+
+the token of `nearest` only has attention scores for the token representations of `["Take", "me", "to", "the", "nearest"]` but not `bank`. This is called _causal self-attention_. There are many other types of attention mechanisms, if you are interested read it here: [link](https://www.turingpost.com/p/attention-types)
+
+Obviously not only the token `bank` has attention scores -- every token performs attention, thus every token has attention scores. The question is: how does the model actually decide which tokens are **relevant** to other tokens? How does it know that `OTP` and `river` are the most relevant tokens in our prompts to the token `bank`?
+This is where `Query (Q)`, `Key (K)`, and `Value (V)` come into the picture, which we will discuss in the next section.
+
+**Takeaway**: Attention is the mechanism that allows tokens to look at other tokens and figure out which ones are relevant. This is how the model can start with the exact same embedding for the token `bank`, but end up with a completely different representation depending on whether we're talking about an `OTP bank` or a `river bank`.
 
 ### Prefill
