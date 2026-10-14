@@ -35,7 +35,7 @@ The answer is simple: **this is not going to stay like this for long**. If you a
 
 Stage 7 might have to wait a bit for a few companies -- but I have a really strong hunch that this is going to be the case for most, and we want to be ready. This series is intended to cover my understanding of the current landscape and to solidify some of what I've learned. The thing that's hard about this in general is the fact that as platform engineers, we have to understand **so much stuff**, and now there's a whole new area we need to dig into. Remember how long it took us to be comfortable with K8s? Now, your `HTTPRoute` setup for your Gateway API implementation is useless. Your `HPA` scaling based on memory/CPU utilization can be thrown out of the window. You'll come across new K8s terminology like `LeaderWorkerSet` and `DisaggregatedSet`. Traditional service meshes won't help you, and you'll come across a ton of new metrics (related to GPU) that will be the heart of operating LLMs. TL,DR: a fun journey lies ahead!
 
-NOTE: This particular article is going to be a bit dense and theory-heavy, but the truth is that we must understand many things about LLM architecture well enough (_as platform engineers, we don't really care about the underlying math of the models, SoftMax functions, tensor transformations and so on_) to be able to reason about operating + debugging + observing + serving them. Showcasing the surprised Pikachu face when someone talks about foundational concepts related to LLMs wouldn't really sell you as the best AI platform engineer now, would it?
+NOTE: This particular article is going to be a bit dense and theory-heavy, but the truth is that we must understand many things about LLM architecture well enough (_as platform engineers, we don't really care about the underlying math of the models, SoftMax functions, tensor transformations and so on_) to be able to reason about operating + debugging + observing + serving them. I'll try to focus-in on the important and fundamental parts, without mixing in unecessary math operations.
 
 Let's begin.
 
@@ -310,6 +310,8 @@ Before we move on, the **checkpoint** we are at right now in our learning journe
 3. the model looks up the **embedding vectors** for the tokens so it can start performing calculations in layers
 4. you have learned about **attention**, **attention heads** and **attention scores**, but you have no idea how they come into the picture yet
 
+This section is going to be the most dense, so prepare your brain. It is still not rocket science, but we'll get just a bit more involved in a few things.
+
 Remember our tensor that we printed using Python in the earlier section about **Tokenization and Embeddings** from inside of the model?
 
 ```text
@@ -361,4 +363,147 @@ Value = What information do I contribute if another token finds me relevant?
 
 The `Query` and `Key` are used to calculate how relevant two tokens are to each other (e.g how relevant is `OTP` for the token `bank`), the `Value` contains the information that actually gets passed forward once that **relevance has been calculated**. The value of `O` is the combined value of `K`, `Q`, `V` after some hardcore math operations. All these four are (yet again!) just different **vector** representations of your input token, with a transformed value at each layer.
 
-I like being practical, so how about we go through an overly simplified version of what we've covered in this section with our good ol' OTP bank example? Let's go.
+I like being practical, so how about we go through an overly simplified version of what we've covered in this section with our good ol' **OTP bank example E2E**?
+
+Let's say that each of the words in our prompt is a token:
+
+```text
+Take
+me
+to
+the
+nearest
+OTP
+bank
+.
+```
+
+By the time a token reaches an **attention layer** the token is represented as a **vector**. The attention layer takes this vector and projects it into a `Q`,`K`, and `V`. E.g:
+
+```text
+Take     -> Q_take,     K_take,     V_take
+me       -> Q_me,       K_me,       V_me
+to       -> Q_to,       K_to,       V_to
+the      -> Q_the,      K_the,      V_the
+nearest  -> Q_nearest,  K_nearest,  V_nearest
+OTP      -> Q_OTP,      K_OTP,      V_OTP
+bank     -> Q_bank,     K_bank,     V_bank
+.        -> Q_dot,      K_dot,      V_dot
+```
+
+so every token gets a `Q`,`K`, and `V` in every layer.
+
+Let's say we are interested in following the token `bank`.
+We also assume that our LLM uses **causal self-attention**, which means that a **token is only allowed to look at itself and the tokens before it**. In case of bank, these are all the tokens in our prompt except for the `.` (which would not matter a lot anyways).
+
+As we've learned, `Query` asks the question: what information am I looking at in other tokens? `Key` answers `Query`'s question: _"Hey this is the info I contain!"_ so `bank`'s `Query` is compared with the `Key` of **every token** it is allowed to see:
+
+```text
+// the "·" operator means dot product of two matrices -- the result of it is a single number
+Q_bank · K_take
+Q_bank · K_me
+Q_bank · K_to
+Q_bank · K_the
+Q_bank · K_nearest
+Q_bank · K_OTP
+Q_bank · K_bank
+```
+
+for the sake of the example, let's assume
+
+```text
+Q_bank = [2.0, 1.0]
+```
+
+and the keys are:
+
+```text
+K_take    = [0.0, 0.2]
+K_me      = [0.1, 0.0]
+K_to      = [0.2, 0.1]
+K_the     = [0.2, 0.2]
+K_nearest = [0.8, 0.6]
+K_OTP     = [1.5, 1.2]
+K_bank    = [0.6, 0.8]
+```
+
+the dot product of the two matrices for the token `OTP` is (where we see how much the Key of `OTP` answers the query of `bank`):
+
+```text
+Q_bank · K_OTP ->
+
+[2.0, 1.0] · [1.5, 1.2]
+= (2.0 × 1.5) + (1.0 × 1.2)
+= 4.2
+```
+
+the dot product of the two matrices for the token `me` is (where we see how much the Key of `me` answers the query of `bank`):
+
+```text
+Q_bank · K_me ->
+
+[2.0, 1.0] · [0.1, 0.0]
+
+= (2.0 × 0.1) + (1.0 × 0.0)
+
+= 0.2
+```
+
+so as we can see, the `Key` of the token `OTP` matches the `Query` of `bank` much stronger than the `Key` of the token `me` (as 4.2 is much bigger than 0.2). The layers do the above calculation for each token, so it will look like this:
+
+```text
+raw score
+Take                0.2
+me                  0.2
+to                  0.5
+the                 0.6
+nearest             2.2
+OTP                 4.2
+bank                2.0
+```
+
+after some **maths** (SoftMax, dividing by the dimension of the Key, etc. etc. etc.) these scores are turned into percentages:
+
+```text
+Take        3.4%
+me          3.4%
+to          4.2%
+the         4.5%
+nearest    14.1%
+OTP        58.0%
+bank       12.2%
+```
+
+now these look similar to the attention scores we've touched on in the **Attention** section! We are free to read this as: the token `bank` is paying around **58%** of its attention to the token `OTP`, whilst only paying **3.4%** of its attention to the token `me` in this particular layer in this **attention head**.
+
+Cool, so now we have these attention percentages, but we seem to be missing the use of `V` and `O`. As we've touched on this earlier, every token also carries a `Value` (what info do I contribute if another token finds me relevant?). Let's say these:
+
+```text
+V_take    = [0.1, 0.0]
+V_me      = [0.0, 0.1]
+V_to      = [0.1, 0.1]
+V_the     = [0.0, 0.1]
+V_nearest = [0.4, 0.3]
+V_OTP     = [1.0, 0.8]
+V_bank    = [0.6, 0.7]
+```
+
+the model essentially takes our beautiful attention percentages it has calculated from `Q` and `K` and applies `V` onto them:
+
+```text
+3.4%  × V_take
++
+3.4%  × V_me
++
+4.2%  × V_to
++
+4.5%  × V_the
++
+14.1% × V_nearest
++
+58.0% × V_OTP
++
+12.2% × V_bank
+```
+
+which will produce a single vector: `[0.72, 0.60]` which is called the **attention output for the token `bank`** for **one** attention head. Then the model takes **all** of these from **all the attention heads**, does a lot of math, and produces `O`.
