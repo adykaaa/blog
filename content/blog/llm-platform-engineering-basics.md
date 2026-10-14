@@ -310,7 +310,7 @@ Before we move on, the **checkpoint** we are at right now in our learning journe
 3. the model looks up the **embedding vectors** for the tokens so it can start performing calculations in layers
 4. you have learned about **attention**, **attention heads** and **attention scores**, but you have no idea how they come into the picture yet
 
-This section is going to be the most dense, so prepare your brain. It is still not rocket science, but we'll get just a bit more involved in a few things.
+This section is going to be the most **dense**, so prepare your brain. It is still not rocket science, but we'll get just a bit more involved in a few things.
 
 Remember our tensor that we printed using Python in the earlier section about **Tokenization and Embeddings** from inside of the model?
 
@@ -474,9 +474,9 @@ OTP        58.0%
 bank       12.2%
 ```
 
-now these look similar to the attention scores we've touched on in the **Attention** section! We are free to read this as: the token `bank` is paying around **58%** of its attention to the token `OTP`, whilst only paying **3.4%** of its attention to the token `me` in this particular layer in this **attention head**.
+now these look similar to the attention scores we've touched on in the **Attention** section! We are free to read this as: the token `bank` is paying around **58%** of its attention to the token `OTP`, whilst only paying **3.4%** of its attention to the token `me` in this **attention head**.
 
-Cool, so now we have these attention percentages, but we seem to be missing the use of `V` and `O`. As we've touched on this earlier, every token also carries a `Value` (what info do I contribute if another token finds me relevant?). Let's say these:
+Cool, so now we have these attention percentages, but we seem to be missing the use of `V` and `O`. As we've touched on this earlier, every token also carries a `Value` (what info do I contribute if another token finds me relevant?). Let's say these are the `Values` for all the tokens `bank` can look at:
 
 ```text
 V_take    = [0.1, 0.0]
@@ -506,4 +506,4 @@ the model essentially takes our beautiful attention percentages it has calculate
 12.2% × V_bank
 ```
 
-which will produce a single vector: `[0.72, 0.60]` which is called the **attention output for the token `bank`** for **one** attention head. Then the model takes **all** of these from **all the attention heads**, does a lot of math, and produces `O`.
+which will produce a single vector: `[0.72, 0.60]` which is called the **attention output for the token `bank`** for **one** attention head. Then the model takes **all** of these values from **all the attention heads**, does a lot of math, and produces `O` which is the `Output` of the layer.
