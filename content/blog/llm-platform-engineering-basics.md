@@ -375,7 +375,7 @@ bank
 .
 ```
 
-By the time a token reaches an **attention layer** the token is represented as a **vector**. The attention layer takes this vector and calculates `Q`,`K`, and `V` for each token:
+By the time a token reaches an **attention layer** the token is represented as a **vector**. The attention layer takes this vector and calculates `Q`,`K`, and `V` for each token (using `q_proj.weight`, `k_proj.weight`, `v_proj.weight` that are part of the model):
 
 ```text
 Take     -> Q_take,     K_take,     V_take
@@ -422,7 +422,7 @@ K_OTP     = [1.5, 1.2]
 K_bank    = [0.6, 0.8]
 ```
 
-the **dot product** of the two matrices for the token `OTP` is (where we see how much the Key of `OTP` answers the query of `bank`):
+the **dot product** of the two matrices for the token `OTP` is (where we see how much the `Key` of `OTP` answers the query of `bank`):
 
 ```text
 Q_bank · K_OTP ->
@@ -432,7 +432,7 @@ Q_bank · K_OTP ->
 = 4.2
 ```
 
-the dot product of the two matrices for the token `me` is (where we see how much the Key of `me` answers the query of `bank`):
+the dot product of the two matrices for the token `me` is (where we see how much the `Key` of `me` answers the query of `bank`):
 
 ```text
 Q_bank · K_me ->
@@ -457,7 +457,7 @@ OTP                 4.2
 bank                2.0
 ```
 
-after some **maths** (SoftMax, dividing by the dimension of the Key, etc. etc. etc.) these scores are turned into percentages:
+after some **maths** these scores are turned into percentages:
 
 ```text
 Take        3.4%
@@ -471,7 +471,8 @@ bank       12.2%
 
 now these look similar to the attention scores we've touched on in the **Attention** section! We are free to read this as: the token `bank` is paying around **58%** of its attention to the token `OTP`, whilst only paying **3.4%** of its attention to the token `me` in this **attention head**.
 
-Cool, so now we have these attention percentages, but we seem to be missing the use of `V` and `O`. As we've touched on this earlier, every token also carries a calculated `Value` (what info do I contribute if another token finds me relevant?). Let's say these are the `Values` for all the tokens `bank` can look at in this attention head:
+Cool, so now we have these attention percentages, but we seem to be missing the use of `V` and `O`.
+As we've touched on this earlier, every token also carries a calculated `Value` (what info do I contribute if another token finds me relevant?). Let's say these are the `Values` for all the tokens `bank` can look at in this attention head:
 
 ```text
 V_take    = [0.1, 0.0]
