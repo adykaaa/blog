@@ -336,29 +336,26 @@ but what the heck are these?
 
 Recall that in our section about **attention**, we have a picture that shows attention **scores** for each token, which represent how relevant each token is in forming an understanding and building the **context-dependent** representation of another token (e.g. `OTP` has a really high attention score for the token `bank`), but we don't really know **how** that score is calculated.
 
-The secret is that when each token arrives in the model and has gone through the embedding phase (aka. it is turned into a vector), it is modified by the values of `K`, `Q`, and `V` which produce an output `O` that is passed to the next layer, then the next layer looks at the output `O` of the previous layer, modifies its value by `K`, `Q` and `V`, and so on until the final layer is reached. An overly simplified way to look at it is that every layer does this:
+The secret is that when each token arrives in the model and has gone through the embedding phase (aka. it is turned into a vector), it is modified by the values of the above weights:
 
 ```text
-Q = x × Wq
-K = x × Wk
-V = x × Wv
+q_proj.weight = learned numbers used to create Queries
+k_proj.weight = learned numbers used to create Keys
+v_proj.weight = learned numbers used to create Values
+o_proj.weight = learned numbers used to transform the attention result
 ```
 
-where:
-
-- `x` is the vector representation of our token
-- `Wq` is the learned (during model training) Query weight matrix
-- `Wk` is the learned (during model training) Key weight matrix
-- `Wv` is the learned (during model training) Value weight matrix
+to calculate `K`, `Q`, `V`, and `O` during **inference**.
 
 ![K,Q,V layers](/blog/images/llm-platform-engineering-overview/q-k-v-layers.png)
 
-So what are `K`, `Q`, and `V` then? A way of thinking about them is:
+So what are `K`, `Q`, `V`, and `O` then that we need to calculate **for each token** during inference? A way of thinking about them is:
 
 ```text
 Query = What information am I looking for in other tokens?
 Key   = What kind of information do I contain? (What info do I contain that might match other tokens' Queries?)
 Value = What information do I contribute if another token finds me relevant?
+Output = Combined output of the above
 ```
 
 The `Query` and `Key` are used to calculate how relevant two tokens are to each other (e.g how relevant is `OTP` for the token `bank`), the `Value` contains the information that actually gets passed forward once that **relevance has been calculated**. The value of `O` is the combined value of `K`, `Q`, `V` after some hardcore math operations. All these four are (yet again!) just different **vector** representations of your input token, with a transformed value at each layer.
@@ -378,7 +375,7 @@ bank
 .
 ```
 
-By the time a token reaches an **attention layer** the token is represented as a **vector**. The attention layer takes this vector and projects it into a `Q`,`K`, and `V`. E.g:
+By the time a token reaches an **attention layer** the token is represented as a **vector**. The attention layer takes this vector and calculates `Q`,`K`, and `V` for each token:
 
 ```text
 Take     -> Q_take,     K_take,     V_take
@@ -390,8 +387,6 @@ OTP      -> Q_OTP,      K_OTP,      V_OTP
 bank     -> Q_bank,     K_bank,     V_bank
 .        -> Q_dot,      K_dot,      V_dot
 ```
-
-so every token gets a `Q`,`K`, and `V` in every layer.
 
 Let's say we are interested in following the token `bank`.
 We also assume that our LLM uses **causal self-attention**, which means that a **token is only allowed to look at itself and the tokens before it**. In case of bank, these are all the tokens in our prompt except for the `.` (which would not matter a lot anyways).
@@ -415,7 +410,7 @@ for the sake of the example, let's assume
 Q_bank = [2.0, 1.0]
 ```
 
-and the keys are:
+and the keys the model calculated are:
 
 ```text
 K_take    = [0.0, 0.2]
@@ -427,7 +422,7 @@ K_OTP     = [1.5, 1.2]
 K_bank    = [0.6, 0.8]
 ```
 
-the dot product of the two matrices for the token `OTP` is (where we see how much the Key of `OTP` answers the query of `bank`):
+the **dot product** of the two matrices for the token `OTP` is (where we see how much the Key of `OTP` answers the query of `bank`):
 
 ```text
 Q_bank · K_OTP ->
@@ -476,7 +471,7 @@ bank       12.2%
 
 now these look similar to the attention scores we've touched on in the **Attention** section! We are free to read this as: the token `bank` is paying around **58%** of its attention to the token `OTP`, whilst only paying **3.4%** of its attention to the token `me` in this **attention head**.
 
-Cool, so now we have these attention percentages, but we seem to be missing the use of `V` and `O`. As we've touched on this earlier, every token also carries a `Value` (what info do I contribute if another token finds me relevant?). Let's say these are the `Values` for all the tokens `bank` can look at:
+Cool, so now we have these attention percentages, but we seem to be missing the use of `V` and `O`. As we've touched on this earlier, every token also carries a calculated `Value` (what info do I contribute if another token finds me relevant?). Let's say these are the `Values` for all the tokens `bank` can look at in this attention head:
 
 ```text
 V_take    = [0.1, 0.0]
