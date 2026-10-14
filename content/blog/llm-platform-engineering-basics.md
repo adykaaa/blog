@@ -292,7 +292,7 @@ OTP -> for another attention head, this can have the highest attention score bec
 bank -> for yet another attention head this has the highest attention score, as the entity we are searching for is a bank.
 ```
 
-Each attention head outputs their attention scores, which go through the calculations in the model to provide the output. After all, more eyes see more!
+Each attention head outputs their attention scores (as vectors), which go through the calculations in the model to provide the output. After all, more eyes see more!
 
 Obviously, not only the token `bank` has attention scores tho -- **every token performs attention**, and thus every token has attention scores. The question is: how does the model actually decide which tokens are **relevant** to other tokens? How does it know that `OTP` and `river` are the most relevant tokens in our prompts to the token `bank`? How does it calculate **the attention scores**?
 
@@ -472,7 +472,7 @@ bank       12.2%
 now these look similar to the attention scores we've touched on in the **Attention** section! We are free to read this as: the token `bank` is paying around **58%** of its attention to the token `OTP`, whilst only paying **3.4%** of its attention to the token `me` in this **attention head**.
 
 Cool, so now we have these attention percentages, but we seem to be missing the use of `V` and `O`.
-As we've touched on this earlier, every token also carries a calculated `Value` (what info do I contribute if another token finds me relevant?). Let's say these are the `Values` for all the tokens `bank` can look at in this attention head:
+As we've touched on this earlier, every token also carries a calculated `Value` (what info do I contribute if another token finds me relevant?). Let's say these are the calculated `Values` for the tokens `bank` can look at in this attention head:
 
 ```text
 V_take    = [0.1, 0.0]
@@ -502,4 +502,7 @@ the model essentially takes our beautiful attention percentages it has calculate
 12.2% × V_bank
 ```
 
-which will produce a single vector: `[0.72, 0.60]` which is called the **attention output for the token `bank`** for **one** attention head. Then the model takes **all** of these values from **all the attention heads**, does a lot of math, and produces `O` which is the `Output` of the layer.
+which will produce a single value (vector): `[0.72, 0.60]` which is called the **attention output for the token `bank`** for **one** attention head. Then the model takes **all** of these attention **outputs** from **all the attention heads** from within a layer, uses the `o_proj.weight` to do some math on them produces, which then produces `O` aka. the `Output` of the layer. Rinse and repeat for every layer!
+
+Here's a diagram I generated with ChatGPT about the above, hopefully it helps get the points across:
+![K,Q,V layers](/blog/images/llm-platform-engineering-overview/attention-flow-bank.png)
