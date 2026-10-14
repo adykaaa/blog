@@ -35,7 +35,7 @@ The answer is simple: **this is not going to stay like this for long**. If you a
 
 Stage 7 might have to wait a bit for a few companies -- but I have a really strong hunch that this is going to be the case for most, and we want to be ready. This series is intended to cover my understanding of the current landscape and to solidify some of what I've learned. The thing that's hard about this in general is the fact that as platform engineers, we have to understand **so much stuff**, and now there's a whole new area we need to dig into. Remember how long it took us to be comfortable with K8s? Now, your `HTTPRoute` setup for your Gateway API implementation is useless. Your `HPA` scaling based on memory/CPU utilization can be thrown out of the window. You'll come across new K8s terminology like `LeaderWorkerSet` and `DisaggregatedSet`. Traditional service meshes won't help you, and you'll come across a ton of new metrics (related to GPU) that will be the heart of operating LLMs. TL,DR: a fun journey lies ahead!
 
-NOTE: This particular article is going to be a bit dense and theory-heavy, but the truth is that we must understand many things about LLM architecture well enough (_as platform engineers, we don't really care about the underlying math of the models, SoftMax functions, tensor transformations and so on_) to be able to reason about operating + debugging + observing + serving them. I'll try to focus-in on the important and fundamental parts, without mixing in unecessary math operations.
+NOTE: This particular article is going to be a bit dense and theory-heavy, but the truth is that we must understand many things about LLM architecture well enough (_as platform engineers, we don't really care about the underlying math of the models, SoftMax functions, tensor transformations and so on_) to be able to reason about operating + debugging + observing + serving them. I'll try to focus-in on the important and fundamental parts, without mixing in unecessary parts we as platform engineers will never touch.
 
 Let's begin.
 
@@ -44,11 +44,15 @@ Let's begin.
 As far as raw resources are concerned, we've only had to deal with disk, CPU, and memory. Disk space has been a non-factor for a long time because SSDs and HDDs have become dirt cheap. Memory and CPU, on the other hand, have always been considered precious resources, so our focus has been on these two -- however, all you keep hearing about is how expensive GPUs are because of AI.
 We know that computation happens on the CPU -- so why on earth can't we keep using it for LLM workloads? Those require computation, just like the server running my awesome backend rewritten in Rust, right? Well, no.
 
+### Cores and memory bandwidth
+
 ![CPU vs GPU architecture](/blog/images/llm-platform-engineering-overview/gpu-vs-cpu-blog.jpg)
 
 Without going into too much unnecessary detail about the actual hardware architecture of CPUs and GPUs, the main thing to remember is that CPUs have a **few powerful cores** that are great at executing a smaller number of complex instructions (compared to the GPU) very quickly: application logic, web servers, databases, operating systems -- so operations that require a lot of branching and complexity. GPUs, on the other hand, have **thousands of smaller cores** that are great at executing simple arithmetic operations (a LOT of them) over and over again. Spoiler alert: LLMs require the latter.
 
 Another issue is **bandwidth**: high-end server CPUs are capable of moving a _few hundred GB_ per second from RAM (DRAM → memory controller → CPU caches (L3/L2/L1) → registers/vector units → computation), whereas GPUs are capable of moving _multiple TB_ per second from their high-bandwidth memory units towards the computation cores (HBM → GPU cache/shared memory/registers → tensor cores → computation). **HBM** stands for High Bandwidth Memory, which is specifically designed for ultra-high bandwidth and low latency, and tensor cores are a type of GPU core specialized at the hardware level to perform billions of **matrix operations** faster than any "regular" cores.
+
+### Matrix operations and model size
 
 LLMs need to execute a **huge number of matrix operations** because nearly every major step in a **transformer** (where these matrix calculations take place) is built from linear algebra (bleh). Each token is represented as a **vector** of numbers, and the LLM repeatedly multiplies these vectors by large weight matrices. Since this happens across many tokens, many layers, and billions of learned parameters, a single generated token can require an enormous number of multiply-and-accumulate operations. These operations are not complex, but they happen billions of times over and over, which makes GPUs much better suited to this work because of their architecture.
 
@@ -197,6 +201,8 @@ you -> 498
 ? -> 30
 ```
 
+### From token IDs to embedding vectors
+
 Great, but what now, you might ask. Well, the model cannot really do anything with the above integer numbers -- remember how everything in a model is represented as matrices (**n-dimensional matrices, aka tensors**). So now comes the **Embedding** part.
 The models all have a big **table** where each ID is mapped to an **embedding vector**. For example, if the model uses embeddings with 4 dimensions (_the number of dimensions for these embeddings is different for models, e.g. for Qwen2.5-0.5B the hidden dimension is 896, so these tokens are represented by 896-dimensional tensors, not just 4 like in the below example_):
 
@@ -214,6 +220,8 @@ This **embedding table is part of the model's learned weights**, so it is just a
 FTR, the embedding table takes up some memory as well. [Qwen2.5-0.5B's configuration](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct/blob/main/config.json) specifies **151,936** vocabulary entries and **896** dimensions. That's `151,936 × 896 = 136,134,656` parameters -- roughly **260 MiB at two bytes per parameter**, just for the input embedding table!
 
 (NOTE: you'll also hear about **embeddings for semantic search and RAG**. Here we're talking about the LLM's **internal, per-token embedding lookup**. Search systems typically use an embedding model to produce a vector representing a whole query or text chunk, which can then be compared with other vectors.)
+
+### Where the CPU and GPU come in
 
 One thing to mention about **tokenization** is that usually this is done by the **CPU**. If we think back to the first point about why GPUs are used for LLMs, we've learnt that they are really good at executing billions of **simple operations** like matrix multiplication and simple math stuff in parallel. However, in the process of tokenization, there are a lot of lookups, string manipulations, branching, etc. -- so **complex operations which the CPU is awesome at**.
 (There are some cases when tokenization is run on the GPU, when dealing with massive scale. For example, NVIDIA has released some tokenizers that run on GPUs. If you are interested, go ahead and research it, but you'll most likely deal with tokenization on the CPU.)
@@ -268,6 +276,8 @@ The embedding lookup for `bank` starts from the same place and gets the same emb
 
 The important part is that attention isn't some **magical** lookup table saying "OTP bank means a financial institution". The **model** isn't consciously reading the sentence and reasoning about which words look important, because everything is still **vectors and matrix multiplications**. The **model has learned** numerical patterns (during **training**) that tell it which token representations are useful to one another. Remember how in the small section about the meaning of **Inference** we have learned that models are just predictor machines without magic? :)
 
+### Causal self-attention
+
 In the decoder-only LLMs we care about here, **each token can attend to itself and the tokens that came before it** but not to future tokens. So in
 
 ```text
@@ -275,6 +285,8 @@ Take me to the nearest OTP bank.
 ```
 
 the token of `nearest` only has attention scores for the token representations of `["Take", "me", "to", "the", "nearest"]` but not `bank` and `.`. This is called _causal self-attention_. There are many other types of attention mechanisms. If you are interested, read it here: [link](https://www.turingpost.com/p/attention-types).
+
+### Attention heads
 
 One phrase you'll come across often is **attention head**. An attention **head** is one independent **view** of the attention calculation, so models usually have more than one attention head. This means that instead of the model doing 1 giant attention calculation for the tokens, it lets these attention heads **perform their calculations separately** based on the separate weights these heads operate with.
 
@@ -311,6 +323,8 @@ Before we move on, the **checkpoint** we are at right now in our learning journe
 4. you have learned about **attention**, **attention heads** and **attention scores**, but you have no idea how they come into the picture yet
 
 This section is going to be the most **dense**, so prepare your brain. It is still not rocket science, but we'll get just a bit more involved in a few things.
+
+### The projection weights inside the model
 
 Remember our tensor that we printed using Python in the earlier section about **Tokenization and Embeddings** from inside of the model?
 
@@ -360,6 +374,8 @@ Output = Combined output of the above
 
 The `Query` and `Key` are used to calculate how relevant two tokens are to each other (e.g how relevant is `OTP` for the token `bank`), the `Value` contains the information that actually gets passed forward once that **relevance has been calculated**. The value of `O` is the combined value of `K`, `Q`, `V` after some hardcore math operations. All these four are (yet again!) just different **vector** representations of your input token, with a transformed value at each layer.
 
+### Creating Q, K, and V for our bank example
+
 I like being practical, so how about we go through an overly simplified version of what we've covered in this section with our good ol' **OTP bank example E2E**?
 
 Let's say that each of the words in our prompt is a token:
@@ -387,6 +403,8 @@ OTP      -> Q_OTP,      K_OTP,      V_OTP
 bank     -> Q_bank,     K_bank,     V_bank
 .        -> Q_dot,      K_dot,      V_dot
 ```
+
+### Comparing Queries and Keys
 
 Let's say we are interested in following the token `bank`.
 We also assume that our LLM uses **causal self-attention**, which means that a **token is only allowed to look at itself and the tokens before it**. In case of bank, these are all the tokens in our prompt except for the `.` (which would not matter a lot anyways).
@@ -471,8 +489,12 @@ bank       12.2%
 
 now these look similar to the attention scores we've touched on in the **Attention** section! We are free to read this as: the token `bank` is paying around **58%** of its attention to the token `OTP`, whilst only paying **3.4%** of its attention to the token `me` in this **attention head**.
 
+### Mixing Values and producing the Output
+
 Cool, so now we have these attention percentages, but we seem to be missing the use of `V` and `O`.
-As we've touched on this earlier, every token also carries a calculated `Value` (what info do I contribute if another token finds me relevant?). Let's say these are the calculated `Values` for the tokens `bank` can look at in this attention head:
+As we've touched on this earlier, every token also carries a calculated `Value` (what info do I contribute if another token finds me relevant?).
+
+Let's say these are the calculated `Values` for the tokens `bank` can look at in this attention head:
 
 ```text
 V_take    = [0.1, 0.0]
@@ -504,5 +526,5 @@ the model essentially takes our beautiful attention percentages it has calculate
 
 which will produce a single value (vector): `[0.72, 0.60]` which is called the **attention output for the token `bank`** for **one** attention head. Then the model takes **all** of these attention **outputs** from **all the attention heads** from within a layer, uses the `o_proj.weight` to do some math on them produces, which then produces `O` aka. the `Output` of the layer. Rinse and repeat for every layer!
 
-Here's a diagram I generated with ChatGPT about the above, hopefully it helps get the points across:
+Here's a diagram I generated with ChatGPT about the above, hopefully it helps get the flow across:
 ![K,Q,V layers](/blog/images/llm-platform-engineering-overview/attention-flow-bank.png)
