@@ -295,6 +295,7 @@ bank -> for yet another attention head this has the highest attention score, as 
 Each attention head outputs their attention scores, which go through the calculations in the model to provide the output. After all, more eyes see more!
 
 Obviously, not only the token `bank` has attention scores tho -- **every token performs attention**, and thus every token has attention scores. The question is: how does the model actually decide which tokens are **relevant** to other tokens? How does it know that `OTP` and `river` are the most relevant tokens in our prompts to the token `bank`? How does it calculate **the attention scores**?
+
 This is where `Query (Q)`, `Key (K)`, and `Value (V)` come into the picture, which we will discuss on a high level in the next section.
 
 **Takeaway**: Attention is the mechanism that allows tokens to look at other tokens and figure out which ones are relevant. This is how the model can start with the exact same embedding for the token `bank`, but end up with a completely different representation depending on whether we're talking about an `OTP bank` or a `river bank`. There are several attention heads in a model, each giving their own attention scores for the tokens to form the output.
@@ -350,7 +351,7 @@ where:
 
 ![K,Q,V layers](/blog/images/llm-platform-engineering-overview/q-k-v-layers.png)
 
-So what are `K`, `Q`, and `V` then? An overly simplified way of thinking about them is:
+So what are `K`, `Q`, and `V` then? A way of thinking about them is:
 
 ```text
 Query = What information am I looking for in other tokens?
@@ -360,4 +361,4 @@ Value = What information do I contribute if another token finds me relevant?
 
 The `Query` and `Key` are used to calculate how relevant two tokens are to each other (e.g how relevant is `OTP` for the token `bank`), the `Value` contains the information that actually gets passed forward once that **relevance has been calculated**. The value of `O` is the combined value of `K`, `Q`, `V` after some hardcore math operations. All these four are (yet again!) just different **vector** representations of your input token, with a transformed value at each layer.
 
-At the beginning of the article I promised not to go into too much details, and it seems like I tricked you. 
+I like being practical, so how about we go through an overly simplified version of what we've covered in this section with our good ol' OTP bank example? Let's go.
