@@ -1,8 +1,18 @@
 ---
-title: "LLM Inference Platform Engineering - Part 1 - Overview"
+title: "LLM Inference Platform Engineering - Part 1 - Overview of the Beast"
 date: 2026-10-10T18:00:00+02:00
 description: "The first part of my LLM Inference Platform Engineering series, providing a high-level overview of the inference process."
-tags: ["LLM", "Inference", "GPU", "Overview"]
+tags:
+    [
+        "LLM",
+        "Inference",
+        "Attention",
+        "QKV",
+        "Overview",
+        "Model",
+        "Decode",
+        "Prefill",
+    ]
 draft: false
 wideCode: true
 toc: true
@@ -111,7 +121,7 @@ If you expected to see a lot of interesting stuff inside the model code, now you
 
 ## LLM flow high-level overview
 
-Now that we know why GPUs are used to run LLMs and we know that a model is nothing but a bunch of learned numbers, it's time to look at the high-level flow of how an LLM works and focus in on the important parts that we'll care about later:
+Now that we know why GPUs are used to run LLMs and we know that a model is nothing but a bunch of learned numbers, it's time to look at the high-level flow of how an LLM works and focus in on the important parts that we'll care about later. My hope is that once we get through this looooong article, you'll be able to reason about all parts (and more!) of the below picture:
 
 ![LLM high level architecture](/blog/images/llm-platform-engineering-overview/llm-overview.png)
 
@@ -264,14 +274,32 @@ In the decoder-only LLMs we care about here, **each token can attend to itself a
 Take me to the nearest OTP bank.
 ```
 
-the token of `nearest` only has attention scores for the token representations of `["Take", "me", "to", "the", "nearest"]` but not `bank`. This is called _causal self-attention_. There are many other types of attention mechanisms. If you are interested, read it here: [link](https://www.turingpost.com/p/attention-types)
+the token of `nearest` only has attention scores for the token representations of `["Take", "me", "to", "the", "nearest"]` but not `bank` and `.`. This is called _causal self-attention_. There are many other types of attention mechanisms. If you are interested, read it here: [link](https://www.turingpost.com/p/attention-types).
 
-Obviously, not only the token `bank` has attention scores tho -- every token performs attention, and thus every token has attention scores. The question is: how does the model actually decide which tokens are **relevant** to other tokens? How does it know that `OTP` and `river` are the most relevant tokens in our prompts to the token `bank`? How does it calculate **the attention scores**?
-This is where `Query (Q)`, `Key (K)`, and `Value (V)` come into the picture, which we will discuss in the next section.
+One phrase you'll come across often is **attention head**. An attention **head** is one independent **view** of the attention calculation, so models usually have more than one attention head. This means that instead of the model doing 1 giant attention calculation for the tokens, it lets these attention heads **perform their calculations separately** based on the separate weights these heads operate with.
 
-**Takeaway**: Attention is the mechanism that allows tokens to look at other tokens and figure out which ones are relevant. This is how the model can start with the exact same embedding for the token `bank`, but end up with a completely different representation depending on whether we're talking about an `OTP bank` or a `river bank`.
+Why is this important? Let's suppose that for our prompt `Take me to the nearest OTP bank.` the answer the LLM spits out is `Sure thing boss. The nearest OTP bank is located on the 4th Street in the 9th District in Budapest`.
 
-### Query, Key, Value (Q, K, V)
+So for our prompt:
+
+```text
+Take
+me -> for 1 attention head this has a high attention score because it will answer "Sure thing boss" and not "Anne / Bob should go to..."
+to
+the
+nearest -> for 1 attention head this can have the highest attention score, because the output of the LLM might include the address for the bank
+OTP -> for another attention head, this can have the highest attention score because it specifices exactly what bank we are searching for
+bank -> for yet another attention head this has the highest attention score, as the entity we are searching for is a bank.
+```
+
+Each attention head outputs their attention scores, which go through the calculations in the model to provide the output. After all, more eyes see more!
+
+Obviously, not only the token `bank` has attention scores tho -- **every token performs attention**, and thus every token has attention scores. The question is: how does the model actually decide which tokens are **relevant** to other tokens? How does it know that `OTP` and `river` are the most relevant tokens in our prompts to the token `bank`? How does it calculate **the attention scores**?
+This is where `Query (Q)`, `Key (K)`, and `Value (V)` come into the picture, which we will discuss on a high level in the next section.
+
+**Takeaway**: Attention is the mechanism that allows tokens to look at other tokens and figure out which ones are relevant. This is how the model can start with the exact same embedding for the token `bank`, but end up with a completely different representation depending on whether we're talking about an `OTP bank` or a `river bank`. There are several attention heads in a model, each giving their own attention scores for the tokens to form the output.
+
+### Query, Key, Value, Output (Q, K, V, O)
 
 Before we move on, the **checkpoint** we are at right now in our learning journey looks like this roughly:
 
@@ -279,7 +307,7 @@ Before we move on, the **checkpoint** we are at right now in our learning journe
 1. you prompt the LLM `Take me to the nearest OTP bank.`
 2. your prompt is converted into **tokens**
 3. the model looks up the **embedding vectors** for the tokens so it can start performing calculations in layers
-4. you have learned about **attention** and **attention scores**, but you have no idea how they come into the picture yet
+4. you have learned about **attention**, **attention heads** and **attention scores**, but you have no idea how they come into the picture yet
 
 Remember our tensor that we printed using Python in the earlier section about **Tokenization and Embeddings** from inside of the model?
 
@@ -293,7 +321,7 @@ From the first line, we can understand a few things already:
 
 - `model` refers to the LLM.
 - `layer` refers to a layer of matrix computations. Models have many layers. Generally, bigger models have more.
-- `0` is the index of the layer.
+- `0` is the index of the layer we are looking at currently. In a model there are several layers.
 - `self_attn` means self-attention, which we discussed in the previous section.
 - `weights` are the numbers the model learned during training - it uses them in matrix computations to transform one vector into another.
 
@@ -305,11 +333,24 @@ but what the heck are these?
 
 Recall that in our section about **attention**, we have a picture that shows attention **scores** for each token, which represent how relevant each token is in forming an understanding and building the **context-dependent** representation of another token (e.g. `OTP` has a really high attention score for the token `bank`), but we don't really know **how** that score is calculated.
 
-The secret is that when each token arrives in the model and has gone through the embedding phase (aka. it is turned into a vector), it is modified by the values of `K`, `Q`, and `V` which produce an output `O` that is passed to the next layer, and this keeps happening until the token reaches the final layer.
+The secret is that when each token arrives in the model and has gone through the embedding phase (aka. it is turned into a vector), it is modified by the values of `K`, `Q`, and `V` which produce an output `O` that is passed to the next layer, then the next layer looks at the output `O` of the previous layer, modifies its value by `K`, `Q` and `V`, and so on until the final layer is reached. An overly simplified way to look at it is that every layer does this:
+
+```text
+Q = x × Wq
+K = x × Wk
+V = x × Wv
+```
+
+where:
+
+- `x` is the vector representation of our token
+- `Wq` is the learned (during model training) Query weight matrix
+- `Wk` is the learned (during model training) Key weight matrix
+- `Wv` is the learned (during model training) Value weight matrix
 
 ![K,Q,V layers](/blog/images/llm-platform-engineering-overview/q-k-v-layers.png)
 
-So what are `K`, `Q`, and `V`? An overly simplified way of thinking about them is:
+So what are `K`, `Q`, and `V` then? An overly simplified way of thinking about them is:
 
 ```text
 Query = What information am I looking for in other tokens?
@@ -317,4 +358,6 @@ Key   = What kind of information do I contain? (What info do I contain that migh
 Value = What information do I contribute if another token finds me relevant?
 ```
 
-these values of Q, K, and V are contained in the model and **have been learned via model training**.
+The `Query` and `Key` are used to calculate how relevant two tokens are to each other (e.g how relevant is `OTP` for the token `bank`), the `Value` contains the information that actually gets passed forward once that **relevance has been calculated**. The value of `O` is the combined value of `K`, `Q`, `V` after some hardcore math operations. All these four are (yet again!) just different **vector** representations of your input token, with a transformed value at each layer.
+
+At the beginning of the article I promised not to go into too much details, and it seems like I tricked you. 
