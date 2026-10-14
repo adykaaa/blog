@@ -201,7 +201,7 @@ you -> 498
 ? -> 30
 ```
 
-### From token IDs to embedding vectors
+#### From token IDs to embedding vectors
 
 Great, but what now, you might ask. Well, the model cannot really do anything with the above integer numbers -- remember how everything in a model is represented as matrices (**n-dimensional matrices, aka tensors**). So now comes the **Embedding** part.
 The models all have a big **table** where each ID is mapped to an **embedding vector**. For example, if the model uses embeddings with 4 dimensions (_the number of dimensions for these embeddings is different for models, e.g. for Qwen2.5-0.5B the hidden dimension is 896, so these tokens are represented by 896-dimensional tensors, not just 4 like in the below example_):
@@ -221,7 +221,7 @@ FTR, the embedding table takes up some memory as well. [Qwen2.5-0.5B's configura
 
 (NOTE: you'll also hear about **embeddings for semantic search and RAG**. Here we're talking about the LLM's **internal, per-token embedding lookup**. Search systems typically use an embedding model to produce a vector representing a whole query or text chunk, which can then be compared with other vectors.)
 
-### Where the CPU and GPU come in
+#### Where the CPU and GPU come in
 
 One thing to mention about **tokenization** is that usually this is done by the **CPU**. If we think back to the first point about why GPUs are used for LLMs, we've learnt that they are really good at executing billions of **simple operations** like matrix multiplication and simple math stuff in parallel. However, in the process of tokenization, there are a lot of lookups, string manipulations, branching, etc. -- so **complex operations which the CPU is awesome at**.
 (There are some cases when tokenization is run on the GPU, when dealing with massive scale. For example, NVIDIA has released some tokenizers that run on GPUs. If you are interested, go ahead and research it, but you'll most likely deal with tokenization on the CPU.)
@@ -276,7 +276,7 @@ The embedding lookup for `bank` starts from the same place and gets the same emb
 
 The important part is that attention isn't some **magical** lookup table saying "OTP bank means a financial institution". The **model** isn't consciously reading the sentence and reasoning about which words look important, because everything is still **vectors and matrix multiplications**. The **model has learned** numerical patterns (during **training**) that tell it which token representations are useful to one another. Remember how in the small section about the meaning of **Inference** we have learned that models are just predictor machines without magic? :)
 
-### Causal self-attention
+#### Causal self-attention
 
 In the decoder-only LLMs we care about here, **each token can attend to itself and the tokens that came before it** but not to future tokens. So in
 
@@ -286,7 +286,7 @@ Take me to the nearest OTP bank.
 
 the token of `nearest` only has attention scores for the token representations of `["Take", "me", "to", "the", "nearest"]` but not `bank` and `.`. This is called _causal self-attention_. There are many other types of attention mechanisms. If you are interested, read it here: [link](https://www.turingpost.com/p/attention-types).
 
-### Attention heads
+#### Attention heads
 
 One phrase you'll come across often is **attention head**. An attention **head** is one independent **view** of the attention calculation, so models usually have more than one attention head. This means that instead of the model doing 1 giant attention calculation for the tokens, it lets these attention heads **perform their calculations separately** based on the separate weights these heads operate with.
 
@@ -324,7 +324,7 @@ Before we move on, the **checkpoint** we are at right now in our learning journe
 
 This section is going to be the most **dense**, so prepare your brain. It is still not rocket science, but we'll get just a bit more involved in a few things.
 
-### The projection weights inside the model
+#### The projection weights inside the model
 
 Remember our tensor that we printed using Python in the earlier section about **Tokenization and Embeddings** from inside of the model?
 
@@ -374,7 +374,7 @@ Output = Combined output of the above
 
 The `Query` and `Key` are used to calculate how relevant two tokens are to each other (e.g how relevant is `OTP` for the token `bank`), the `Value` contains the information that actually gets passed forward once that **relevance has been calculated**. The value of `O` is the combined value of `K`, `Q`, `V` after some hardcore math operations. All these four are (yet again!) just different **vector** representations of your input token, with a transformed value at each layer.
 
-### Creating Q, K, and V for our bank example
+#### Creating Q, K, and V for our bank example
 
 I like being practical, so how about we go through an overly simplified version of what we've covered in this section with our good ol' **OTP bank example E2E**?
 
@@ -404,7 +404,7 @@ bank     -> Q_bank,     K_bank,     V_bank
 .        -> Q_dot,      K_dot,      V_dot
 ```
 
-### Comparing Queries and Keys
+#### Comparing Queries and Keys
 
 Let's say we are interested in following the token `bank`.
 We also assume that our LLM uses **causal self-attention**, which means that a **token is only allowed to look at itself and the tokens before it**. In case of bank, these are all the tokens in our prompt except for the `.` (which would not matter a lot anyways).
@@ -489,7 +489,7 @@ bank       12.2%
 
 now these look similar to the attention scores we've touched on in the **Attention** section! We are free to read this as: the token `bank` is paying around **58%** of its attention to the token `OTP`, whilst only paying **3.4%** of its attention to the token `me` in this **attention head**.
 
-### Mixing Values and producing the Output
+#### Mixing Values and producing the Output
 
 Cool, so now we have these attention percentages, but we seem to be missing the use of `V` and `O`.
 As we've touched on this earlier, every token also carries a calculated `Value` (what info do I contribute if another token finds me relevant?).
