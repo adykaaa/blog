@@ -157,7 +157,7 @@ black box of magic and lots of maths
 generated output (The weather is sunny in Hungary, yo!)
 ```
 
-The whole process of running the trained model to produce an output is called **inference**. We will dive deeper into the important parts, but one of the points I'd like to get across before diving deeper is that LLMs are nothing more than **word predictor machines**. You give it a prompt. The prompt goes through the black box of magic calculations. Then the word with the highest percentage of being the right next word in the output - _based on context and a bunch of calculations_ - will appear in the LLM's streamed answer.
+The whole process of running the trained model to produce an output is called **inference**. We will dive deeper into the important parts, but one of the points I'd like to get across before diving deeper is that LLMs are nothing more than **token predictor machines**. You give it a prompt, the prompt goes through the black box of magic calculations, and it gives you an answer based on a LOT of maths and learned weights.
 
 **Takeaway**: The word **inference** refers to the process of actually running the model and getting the output based on the inputs. LLMs are not magic. They are word predictor machines.
 
@@ -312,7 +312,7 @@ OTP -> for another attention head, this can have the highest attention score bec
 bank -> for yet another attention head this has the highest attention score, as the entity we are searching for is a bank.
 ```
 
-Each attention head outputs their attention scores (as vectors), which go through the calculations in the model to provide the output. After all, more eyes see more!
+Each attention head calculates its own attention scores, then uses those scores to combine the `Value` vectors (we will learn about later) into an attention output. After all, more eyes see more!
 
 Obviously, not only the token `bank` has attention scores tho -- **every token performs attention**, and thus every token has attention scores. The question is: how does the model actually decide which tokens are **relevant** to other tokens? How does it know that `OTP` and `river` are the most relevant tokens in our prompts to the token `bank`? How does it calculate **the attention scores**?
 
@@ -380,7 +380,7 @@ Value = What information do I contribute if another token finds me relevant?
 Output = Combined output of the above
 ```
 
-The `Query` and `Key` are used to calculate how relevant two tokens are to each other (e.g how relevant is `OTP` for the token `bank`), the `Value` contains the information that actually gets passed forward once that **relevance has been calculated**. The value of `O` is the combined value of `K`, `Q`, `V` after some hardcore math operations. All these four are (yet again!) just different **vector** representations of your input token, with a transformed value at each layer.
+The `Query` and `Key` are used to calculate how relevant two tokens are to each other (e.g how relevant is `OTP` for the token `bank`), the `Value` contains the information that actually gets passed forward once that **relevance has been calculated**. `Q`, `K`, and `V` are projections of the token's current representation. `O` is produced after attention has mixed information from the relevant `V` vectors, and `o_proj` transforms that combined result back into the model's representation space.
 
 #### Creating Q, K, and V for our bank example
 
@@ -420,7 +420,7 @@ We also assume that our LLM uses **causal self-attention**, which means that a *
 As we've learned, `Query` asks the question: what information am I looking at in other tokens? `Key` answers `Query`'s question: _"Hey this is the info I contain!"_ so `bank`'s `Query` is compared with the `Key` of **every token** it is allowed to see:
 
 ```text
-// the "·" operator means dot product of two matrices -- the result of it is a single number
+// the "·" operator means dot product of two vectors -- the result is a single number
 Q_bank · K_take
 Q_bank · K_me
 Q_bank · K_to
