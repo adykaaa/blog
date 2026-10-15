@@ -52,13 +52,21 @@ Without going into too much unnecessary detail about the actual hardware archite
 
 Another issue is **bandwidth**: high-end server CPUs are capable of moving a _few hundred GB_ per second from RAM (DRAM → memory controller → CPU caches (L3/L2/L1) → registers/vector units → computation), whereas GPUs are capable of moving _multiple TB_ per second from their high-bandwidth memory units towards the computation cores (HBM → GPU cache/shared memory/registers → tensor cores → computation). **HBM** stands for High Bandwidth Memory, which is specifically designed for ultra-high bandwidth and low latency, and tensor cores are a type of GPU core specialized at the hardware level to perform billions of **matrix operations** faster than any "regular" cores.
 
-### Matrix operations and model size
+### Matrix operations, model size, GPU numbers
 
 LLMs need to execute a **huge number of matrix operations** because nearly every major step in a **transformer** (where these matrix calculations take place) is built from linear algebra (bleh). Each token is represented as a **vector** of numbers, and the LLM repeatedly multiplies these vectors by large weight matrices. Since this happens across many tokens, many layers, and billions of learned parameters, a single generated token can require an enormous number of multiply-and-accumulate operations. These operations are not complex, but they happen billions of times over and over, which makes GPUs much better suited to this work because of their architecture.
 
+GPU numbers we generally care about:
+
+- **compute** (how much math the GPU can do, measured in FLOPS)
+- **capacity** (how much data, including model weights, fits in GPU memory. Measured in GB or TB of `VRAM`.)
+- **bandwith** (how fast can the GPU read its own memory, measured in `GB/s` or `TB/s`)
+
+As we'll learn about this later, there are certain operations in an LLM that benefit a LOT from high **capacity + bandwith**, but compute doesn't really move the needle for them. There are also operations where **compute** is king.
+
 It is also worth mentioning that there are models that can be run on CPUs (for example, SmolLM) because their parameter counts are small enough that the amount of computation and memory movement stays manageable on a CPU. In general, **the number of parameters is strongly correlated with how much compute power is needed: more parameters mean more weights must be loaded and more multiply-accumulate operations must be performed for each token**, so larger models require much more memory bandwidth and processing throughput. SmolLM has a version that has only 135 million parameters, whereas something like Llama 3.1 405B has **405 billion parameters** -- good luck running that on your gaming CPU!
 
-**Takeaway**: GPUs are much more suited architecturally on the hardware level for the matrix operations that are needed for LLMs to calculate, so you'll be using them.
+**Takeaway**: GPUs are much more suited architecturally on the hardware level for the matrix operations that are needed for LLMs to calculate, so you'll be using them. To determine what kind of a GPU you need, you'll look at its compute, capacity, and bandwith numbers -- depending on your usecase.
 
 ## The model
 
