@@ -363,7 +363,7 @@ to calculate `K`, `Q`, `V`, and `O` during **inference**.
 
 ![K,Q,V layers](/blog/images/llm-platform-engineering-overview/q-k-v-layers.png)
 
-So what are `K`, `Q`, `V`, and `O` then that we need to calculate **for each token** during inference? A way of thinking about them is:
+So what are `K`, `Q`, `V`, and `O` then that we need to calculate **for each token** during inference? A way of thinking about them is that they are just other vectors that carry the below information about each token:
 
 ```text
 Query = What information am I looking for in other tokens?
@@ -492,7 +492,7 @@ now these look similar to the attention scores we've touched on in the **Attenti
 #### Mixing Values and producing the Output
 
 Cool, so now we have these attention percentages, but we seem to be missing the use of `V` and `O`.
-As we've touched on this earlier, every token also carries a calculated `Value` (what info do I contribute if another token finds me relevant?).
+As we've touched on this earlier, every token also carries a calculated `Value` (_what info do I contribute if another token finds me relevant -- what's my value?_).
 
 Let's say these are the calculated `Values` for the tokens `bank` can look at in this attention head:
 
@@ -524,7 +524,17 @@ the model essentially takes our beautiful attention percentages it has calculate
 12.2% × V_bank
 ```
 
-which will produce a single value (vector): `[0.72, 0.60]` which is called the **attention output for the token `bank`** for **one** attention head. Then the model takes **all** of these attention **outputs** from **all the attention heads** from within a layer, uses the `o_proj.weight` to do some math on them produces, which then produces `O` aka. the `Output` of the layer. Rinse and repeat for every layer!
+which will produce a single value (vector): `[0.72, 0.60]` which is called the **attention output for the token `bank`** for **one** attention head. Then the model takes **all** of these attention **outputs** from **all the attention heads** from within a layer, uses the `o_proj.weight` to do some math on them which then produces `O` aka. the `Output` of the **attention part of the layer**. This `O` is not the final output of a layer, and deffo not the final output that will come up on your screen!
 
-Here's a diagram I generated with ChatGPT about the above, hopefully it helps get the flow across:
+Here's a **diagram** I generated with ChatGPT about the above to get the flow across:
 ![K,Q,V layers](/blog/images/llm-platform-engineering-overview/attention-flow-bank.png)
+
+To produce the LLM's final answer however (_"Sure thing boss..."_) it goes through **more maths**, the output is transformed as part of something called the **LM Head**, produces **logits**, and then based on how the model is configured to select from the tokens, etc. etc. and then it will start displaying the output. This is hardcore maths that we don't need to really care about, and we can look at it as a black box.
+
+If you've reached this point, you might feel **betrayed**. At the beginning of the article I told you that we will get just enough info as platform engineers to have the sufficient amount of understanding for inference, and now you've seen variables such as `Q`, `K`, `V`, you've seen matrix operations, probabilities, attention, etc.
+
+The point I'd like to get across in this section (_besides you not showcasing the surprised Pikachu face when someone mentions any of these words_) is how **computationally heavy** and **memory demanding** calculating `Q`, `K`, `V`, and `O` are **for a single token** in a relatively big model. `Llama 3.1-70B` (8,192 dimensions, 80 layers, 64 attention heads, etc.) performs more than **70 BILLION!!!** scalar multiplications for pushing **1 token through**.... out of this more than **12 BILLION** operations are used for calculating the `Q`, `K`, `V`, and `O` projections. These also need to be stored somewhere, and for `LLama 3.1-70B` `Q`, `K`, `V`, and `O` occupy ~**3MB** per token.
+
+Also remember how for the token `bank` the model needed to calculate every other token's `Q`s, `K`s, `V`s, and `O`s (causal self-attention and all that jazz)? What happens if the calculation is happening for the tokens after `bank`? Do they all need to do everything again that `bank` did AND MORE? Every calculation, and store every `Q`, `K`, `V`˙, and `O` again? **Not quite**. This will bring us to one of the most important parts of LLMs you will work with (and most likely fiddle around with as a pf eng) called the `KV Cache` but to understand that, we first need to look at the first big part of the LLM workflow that fills this cache called **prefill**.
+
+### Prefill
