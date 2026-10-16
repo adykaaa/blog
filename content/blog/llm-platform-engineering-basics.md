@@ -337,10 +337,10 @@ This is where `Query (Q)`, `Key (K)`, and `Value (V)` come into the picture, whi
 
 Before we move on, the **checkpoint** we are at right now in our learning journey looks like this roughly:
 
-0. you know **GPUs** are da bomb for performing calculations for LLMs due to their architecture. You also know that a **model** is nothing but a bunch of tensors
+0. you know **GPUs** are da bomb for performing calculations for LLMs due to their architecture. You also know that a **model** is nothing but a bunch of tensors and layers and weights
 1. you prompt the LLM `Take me to the nearest OTP bank.`
 2. your prompt is converted into **tokens**
-3. the model looks up the **embedding vectors** for the tokens so it can start performing calculations in layers
+3. the model looks up the **embedding vectors** for the tokens so it can start performing calculations in layers using the **weights** it has learned during training
 4. you have learned about **attention**, **attention heads** and **attention scores**, but you have no idea how they come into the picture yet
 
 This section is going to be the most **dense**, so prepare your brain. It is still not rocket science, but we'll get just a bit more involved in a few things.
@@ -568,4 +568,4 @@ There’s also an important **performance consequence** hiding in all of this. W
 ### Prefill
 
 **Prefill** is the first part of the inference workflow. It lasts from submitting our prompt up until the first token is returned to us in the LLM's answer (from this article **embedding** that comes after tokenization - _where our prompt's tokens are converted to vectors_ - is the first part of prefill).
-In practical terms, when we prompt any LLM there is a slight **pause** before it starts streaming the answer back -- that pause is the prefill phase. You might also notice that the **bigger your prompt, the longer the pause** -- which now should **NOT** surprise you because you know about tokenization, embedding, attention (token `n+1` needs all the stuff from tokens `0..n`), `Q`s, `K`s, `V`s, how each token needs a ton of maths (_billions or trillions of operations_) and more.
+In practical terms, when we prompt any LLM there is a slight **pause** before it starts streaming the answer back -- that pause + getting the first token back in the LLM's answer is the prefill phase. You might also notice that the **bigger your prompt, the longer the pause** -- which now should **NOT** surprise you because you know about tokenization, embedding, attention (token `n+1` needs all the stuff from tokens `0..n`), `Q`s, `K`s, `V`s, how each token needs a ton of maths (_billions or trillions of operations_) and more.
