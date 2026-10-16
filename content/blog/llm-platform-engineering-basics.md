@@ -373,7 +373,7 @@ to calculate `K`, `Q`, `V`, and `O` during **inference**.
 
 ![K,Q,V layers](/blog/images/llm-platform-engineering-overview/q-k-v-layers.png)
 
-So what are `K`, `Q`, `V`, and `O` then that we need to calculate **for each token** during inference? A way of thinking about them is that they are just other **vectors that carry the below information about each token**:
+So what are `K`, `Q`, `V`, and `O` then? A way of thinking about them is that they are just other **vectors that carry the below information about each token**:
 
 ```text
 Query = What information am I looking for in other tokens?
