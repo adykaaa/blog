@@ -66,6 +66,8 @@ As we'll learn about this later, there are certain operations in an LLM that ben
 
 It is also worth mentioning that there are models that can be run on CPUs (for example, SmolLM) because their parameter counts are small enough that the amount of computation and memory movement stays manageable on a CPU. In general, **the number of parameters is strongly correlated with how much compute power is needed: more parameters mean more weights must be loaded and more multiply-accumulate operations must be performed for each token**, so larger models require much more memory bandwidth and processing throughput. SmolLM has a version that has only 135 million parameters, whereas something like Llama 3.1 405B has **405 billion parameters** -- good luck running that on your gaming CPU!
 
+#### Takeaway
+
 **Takeaway**: GPUs are much more suited architecturally on the hardware level for the matrix operations that are needed for LLMs to calculate, so you'll be using them. To determine what kind of a GPU you need, you'll look at its compute, capacity, and bandwith numbers -- depending on your usecase.
 
 ## The model
@@ -129,6 +131,8 @@ If you expected to see a lot of interesting stuff inside the model code, now you
 
 ![Overly-simplified way of looking at models](/blog/images/llm-platform-engineering-overview/simplified-overview-model.png)
 
+#### Takeaway
+
 **Takeaway**: A model is nothing but a **file** which contains a bunch of numbers in N-dimensional matrices, aka **tensors**. These numbers were learned via model training and are applied to your input to produce the correct output. We use HuggingFace for storing, distributing and downloading models (we can also store these locally in _PersistentVolumes_ or in cloud object stores btw), and these models use the `.safetensors` extension.
 
 ## LLM flow high-level overview
@@ -158,6 +162,8 @@ generated output (The weather is sunny in Hungary, yo!)
 ```
 
 The whole process of running the trained model to produce an output is called **inference**. We will dive deeper into the important parts, but one of the points I'd like to get across before diving deeper is that LLMs are nothing more than **token predictor machines**. You give it a prompt, the prompt goes through the black box of magic calculations, and it gives you an answer based on a LOT of maths and learned weights.
+
+#### Takeaway
 
 **Takeaway**: The word **inference** refers to the process of actually running the model and getting the output based on the inputs. LLMs are not magic. They are word predictor machines.
 
@@ -242,6 +248,8 @@ input text -> tokenizer (CPU runs it) -> token IDs [9707, 11, 1246, 525, 498, 30
 -> transformer layers start the work
 ```
 
+#### Takeaway
+
 **Takeaway**: Tokenization is the process where your prompt for the LLM is turned into simple numbers (work done by the CPU). Embedding is where these numbers' vector representation is looked up in vector embedding matrices inside the model (on the GPU) that the LLM can finally start working with in the transformer layers.
 
 ### Attention
@@ -319,6 +327,8 @@ Each attention head calculates its own attention scores, then uses those scores 
 Obviously, not only the token `bank` has attention scores tho -- **every token performs attention**, and thus every token has attention scores. The question is: how does the model actually decide which tokens are **relevant** to other tokens? How does it know that `OTP` and `river` are the most relevant tokens in our prompts to the token `bank`? How does it calculate **the attention scores**?
 
 This is where `Query (Q)`, `Key (K)`, and `Value (V)` come into the picture, which we will discuss on a high level in the next section.
+
+#### Takeaway
 
 **Takeaway**: Attention is the mechanism that allows tokens to look at other tokens and figure out which ones are relevant. This is how the model can start with the exact same embedding for the token `bank`, but end up with a completely different representation depending on whether we're talking about an `OTP bank` or a `river bank`. There are several attention heads in a model, each giving their own attention scores for the tokens to help contribute to the output of a layer.
 
@@ -539,7 +549,7 @@ which will produce a single value (vector): `[0.72, 0.60]` which is called the *
 Here's a **diagram** I generated with ChatGPT about the above to get the flow across:
 ![K,Q,V layers](/blog/images/llm-platform-engineering-overview/attention-flow-bank.png)
 
-To produce the LLM's final answer however (_"Sure thing boss..."_) it goes through **more maths**, the output is transformed as part of something called the **LM Head**, produces **logits**, and then based on how the model is configured to select from the tokens, etc. etc. and then it will start displaying the output. This is hardcore maths that we don't need to really care about, and we can look at it as a black box.
+To produce the LLM's final answer however (_"Sure thing boss..."_) it goes through **more maths**, the `Output` is transformed as part of something called the **LM Head**, produces **logits**, and then based on how the model is configured to select from the tokens, etc. etc. and then it will start displaying the output. This is hardcore maths that we don't need to really care about, and we can look at it as a black box.
 
 #### Why on earth do you need to know this then
 
@@ -550,9 +560,11 @@ The point I'd like to get across in this section (_besides you not showcasing th
 
 There’s also an important **performance consequence** hiding in all of this. When the model processes token `n+1`, its `Query` needs to attend to the `Keys` and `Values` of the tokens that came before it. **So the more tokens there are in the context, the more previous information each new token has to consider**. In practice, this means longer conversations generally make inference waaaaaay more **expensive** as they increase the work before the first token appears, and can also make each generated token slower as the context grows. Long context heavily affects both **latency** and **memory** so the next three concepts we are about to dive head first into matter so much for understanding inference performance (prefill, decode, KV cache).
 
+#### Takeaway
+
 **Takeaway**: `Q`, `K`, `V`, and `O` are vector representations calculated for **every token** in **every attention layer** using weights that are part of the model and were learned during training. `Q` and `K` are used to figure out which tokens are relevant to each other, `V` carries the information that gets mixed together based on that relevance, and `O` is the transformed result of the attention calculation. These calculations happen over and over again across tokens and layers, which makes them both **compute- and memory-heavy**. Token `n+1` usually needs to have access to the `Q`, `K`, `V`, and `O`s of every other token that comes before it (`0..n+1)` and itself, so the a bigger context window means more work.
 
 ### Prefill
 
 **Prefill** is the first part of the inference workflow. It lasts from submitting our prompt up until the first token is returned to us in the LLM's answer (from this article **embedding** that comes after tokenization - _where our prompt's tokens are converted to vectors_ - is the first part of prefill).
-In practical terms, when we prompt any LLM there is a slight **pause** before it starts streaming the answer back -- that pause is the prefill phase. You might also notice that the **bigger your prompt, the longer the pause** -- which now should **NOT** surprise you because you know about attention, `Q`s, `K`s, `V`s, causal self-attention (token `n+1` needs all the stuff from tokens `0..n`), how each token needs a ton of maths (_billions or trillions of operations_) and more.
+In practical terms, when we prompt any LLM there is a slight **pause** before it starts streaming the answer back -- that pause is the prefill phase. You might also notice that the **bigger your prompt, the longer the pause** -- which now should **NOT** surprise you because you know about tokenization, embedding, attention (token `n+1` needs all the stuff from tokens `0..n`), `Q`s, `K`s, `V`s, how each token needs a ton of maths (_billions or trillions of operations_) and more.
