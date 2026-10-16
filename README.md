@@ -11,7 +11,7 @@ hugo server -D
 ## New post
 
 ```bash
-hugo new content posts/my-post-title.md
+hugo new content blog/my-post-title.md
 ```
 
 Set `draft: false` when ready to publish, then push to `main`.
@@ -19,6 +19,11 @@ Set `draft: false` when ready to publish, then push to `main`.
 ## Deploy
 
 Push to `main` — GitHub Actions handles the build and deploy automatically.
+
+The GitHub Pages base URL is `https://adykaaa.github.io/blog/`. Post permalinks
+omit the `content/blog` section name, so posts appear at `/blog/<post-name>/`.
+Existing posts have aliases that redirect their former `/blog/blog/<post-name>/`
+URLs to the new addresses.
 
 ## Article navigation
 

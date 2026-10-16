@@ -4,6 +4,7 @@ date: 2026-10-04T18:00:00+02:00
 description: "A complete CPU-only local LLM runbook with OpenLIT, Prometheus, Tempo, and one Grafana operations dashboard."
 tags: ["Kubernetes", "AI", "Observability", "Grafana"]
 draft: false
+aliases: ["/blog/observable-local-llm-minikube/"]
 wideCode: true
 toc: true
 ---

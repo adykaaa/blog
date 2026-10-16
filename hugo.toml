@@ -1,7 +1,11 @@
-baseURL = "https://adykaaa.github.io/blog"
+baseURL = "https://adykaaa.github.io/blog/"
 languageCode = "en-us"
 title = "Adam Toth"
 buildFuture = true
+
+# GitHub Pages supplies /blog/ through baseURL; omit the content section.
+[permalinks.page]
+  blog = "/:slugorcontentbasename/"
 
 [params]
   author = "Adam Toth"
@@ -15,12 +19,12 @@ buildFuture = true
   [[menu.main]]
     identifier = "blog"
     name = "Blog"
-    url = "/"
+    pageRef = "/"
     weight = 10
   [[menu.main]]
     identifier = "about"
     name = "About"
-    url = "/about/"
+    pageRef = "/about"
     weight = 20
 
 [markup]

@@ -14,6 +14,7 @@ tags:
         "Prefill",
     ]
 draft: false
+aliases: ["/blog/llm-platform-engineering-basics/"]
 wideCode: true
 toc: true
 ---
@@ -66,7 +67,7 @@ As we'll learn about this later, there are certain operations in an LLM that ben
 
 It is also worth mentioning that there are models that can be run on CPUs (for example, SmolLM) because their parameter counts are small enough that the amount of computation and memory movement stays manageable on a CPU. In general, **the number of parameters is strongly correlated with how much compute power is needed: more parameters mean more weights must be loaded and more multiply-accumulate operations must be performed for each token**, so larger models require much more memory bandwidth and processing throughput. SmolLM has a version that has only 135 million parameters, whereas something like Llama 3.1 405B has **405 billion parameters** -- good luck running that on your gaming CPU!
 
-#### Takeaway
+### Takeaway
 
 **Takeaway**: GPUs are much more suited architecturally on the hardware level for the matrix operations that are needed for LLMs to calculate, so you'll be using them. To determine what kind of a GPU you need, you'll look at its compute, capacity, and bandwith numbers -- depending on your usecase.
 
@@ -131,7 +132,7 @@ If you expected to see a lot of interesting stuff inside the model code, now you
 
 ![Overly-simplified way of looking at models](/blog/images/llm-platform-engineering-overview/simplified-overview-model.png)
 
-#### Takeaway
+### Takeaway
 
 **Takeaway**: A model is nothing but a **file** which contains a bunch of numbers in N-dimensional matrices, aka **tensors**. These numbers were learned via model training and are applied to your input to produce the correct output. We use HuggingFace for storing, distributing and downloading models (we can also store these locally in _PersistentVolumes_ or in cloud object stores btw), and these models use the `.safetensors` extension.
 
