@@ -314,6 +314,8 @@ bank -> for yet another attention head this has the highest attention score, as 
 
 Each attention head calculates its own attention scores, then uses those scores to combine the `Value` vectors (we will learn about later) into an attention output. After all, more eyes see more!
 
+![Attention heads](/blog/images/llm-platform-engineering-overview/attention-heads.png)
+
 Obviously, not only the token `bank` has attention scores tho -- **every token performs attention**, and thus every token has attention scores. The question is: how does the model actually decide which tokens are **relevant** to other tokens? How does it know that `OTP` and `river` are the most relevant tokens in our prompts to the token `bank`? How does it calculate **the attention scores**?
 
 This is where `Query (Q)`, `Key (K)`, and `Value (V)` come into the picture, which we will discuss on a high level in the next section.
@@ -371,7 +373,7 @@ to calculate `K`, `Q`, `V`, and `O` during **inference**.
 
 ![K,Q,V layers](/blog/images/llm-platform-engineering-overview/q-k-v-layers.png)
 
-So what are `K`, `Q`, `V`, and `O` then that we need to calculate **for each token** during inference? A way of thinking about them is that they are just other vectors that carry the below information about each token:
+So what are `K`, `Q`, `V`, and `O` then that we need to calculate **for each token** during inference? A way of thinking about them is that they are just other **vectors that carry the below information about each token**:
 
 ```text
 Query = What information am I looking for in other tokens?
