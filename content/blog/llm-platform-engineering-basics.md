@@ -69,7 +69,7 @@ It is also worth mentioning that there are models that can be run on CPUs (for e
 
 ### Takeaway
 
-**Takeaway**: GPUs are much more suited architecturally on the hardware level for the matrix operations that are needed for LLMs to calculate, so you'll be using them. To determine what kind of a GPU you need, you'll look at its compute, capacity, and bandwith numbers -- depending on your usecase.
+GPUs are much more suited architecturally on the hardware level for the matrix operations that are needed for LLMs to calculate, so you'll be using them. To determine what kind of a GPU you need, you'll look at its compute, capacity, and bandwith numbers -- depending on your usecase.
 
 ## The model
 
@@ -134,7 +134,7 @@ If you expected to see a lot of interesting stuff inside the model code, now you
 
 ### Takeaway
 
-**Takeaway**: A model is nothing but a **file** which contains a bunch of numbers in N-dimensional matrices, aka **tensors**. These numbers were learned via model training and are applied to your input to produce the correct output. We use HuggingFace for storing, distributing and downloading models (we can also store these locally in _PersistentVolumes_ or in cloud object stores btw), and these models use the `.safetensors` extension.
+A model is nothing but a **file** which contains a bunch of numbers in N-dimensional matrices, aka **tensors**. These numbers were learned via model training and are applied to your input to produce the correct output. We use HuggingFace for storing, distributing and downloading models (we can also store these locally in _PersistentVolumes_ or in cloud object stores btw), and these models use the `.safetensors` extension.
 
 ## LLM flow high-level overview
 
@@ -166,7 +166,7 @@ The whole process of running the trained model to produce an output is called **
 
 #### Takeaway
 
-**Takeaway**: The word **inference** refers to the process of actually running the model and getting the output based on the inputs. LLMs are not magic. They are word predictor machines.
+The word **inference** refers to the process of actually running the model and getting the output based on the inputs. LLMs are not magic. They are word predictor machines.
 
 ### Tokenization and Embeddings
 
@@ -251,7 +251,7 @@ input text -> tokenizer (CPU runs it) -> token IDs [9707, 11, 1246, 525, 498, 30
 
 #### Takeaway
 
-**Takeaway**: Tokenization is the process where your prompt for the LLM is turned into simple numbers (work done by the CPU). Embedding is where these numbers' vector representation is looked up in vector embedding matrices inside the model (on the GPU) that the LLM can finally start working with in the transformer layers.
+Tokenization is the process where your prompt for the LLM is turned into simple numbers (work done by the CPU). Embedding is where these numbers' vector representation is looked up in vector embedding matrices inside the model (on the GPU) that the LLM can finally start working with in the transformer layers.
 
 ### Attention
 
@@ -331,7 +331,7 @@ This is where `Query (Q)`, `Key (K)`, and `Value (V)` come into the picture, whi
 
 #### Takeaway
 
-**Takeaway**: Attention is the mechanism that allows tokens to look at other tokens and figure out which ones are relevant. This is how the model can start with the exact same embedding for the token `bank`, but end up with a completely different representation depending on whether we're talking about an `OTP bank` or a `river bank`. There are several attention heads in a model, each giving their own attention scores for the tokens to help contribute to the output of a layer.
+Attention is the mechanism that allows tokens to look at other tokens and figure out which ones are relevant. This is how the model can start with the exact same embedding for the token `bank`, but end up with a completely different representation depending on whether we're talking about an `OTP bank` or a `river bank`. There are several attention heads in a model, each giving their own attention scores for the tokens to help contribute to the output of a layer.
 
 ### Query, Key, Value, Output (Q, K, V, O)
 
@@ -563,7 +563,7 @@ There’s also an important **performance consequence** hiding in all of this. W
 
 #### Takeaway
 
-**Takeaway**: `Q`, `K`, `V`, and `O` are vector representations calculated for **every token** in **every attention layer** during inference using **weights** that are part of the model and were learned during training. `Q` and `K` are used to figure out which tokens are relevant to each other, `V` carries the information that gets mixed together based on that relevance, and `O` is the transformed result of the attention calculation. These calculations happen over and over again across tokens and layers, which makes them both **compute- and memory-heavy**. Token `n+1` usually needs to have access to the `Q`, `K`, `V`, and `O`s of every other token that comes before it (`0..n+1)` and itself, so the a bigger context window means more work.
+`Q`, `K`, `V`, and `O` are vector representations calculated for **every token** in **every attention layer** during inference using **weights** that are part of the model and were learned during training. `Q` and `K` are used to figure out which tokens are relevant to each other, `V` carries the information that gets mixed together based on that relevance, and `O` is the transformed result of the attention calculation. These calculations happen over and over again across tokens and layers, which makes them both **compute- and memory-heavy**. Token `n+1` usually needs to have access to the `Q`, `K`, `V`, and `O`s of every other token that comes before it (`0..n+1)` and itself, so the a bigger context window means more work.
 
 ### Prefill
 
