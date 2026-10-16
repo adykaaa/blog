@@ -563,7 +563,7 @@ There’s also an important **performance consequence** hiding in all of this. W
 
 #### Takeaway
 
-**Takeaway**: `Q`, `K`, `V`, and `O` are vector representations calculated for **every token** in **every attention layer** using weights that are part of the model and were learned during training. `Q` and `K` are used to figure out which tokens are relevant to each other, `V` carries the information that gets mixed together based on that relevance, and `O` is the transformed result of the attention calculation. These calculations happen over and over again across tokens and layers, which makes them both **compute- and memory-heavy**. Token `n+1` usually needs to have access to the `Q`, `K`, `V`, and `O`s of every other token that comes before it (`0..n+1)` and itself, so the a bigger context window means more work.
+**Takeaway**: `Q`, `K`, `V`, and `O` are vector representations calculated for **every token** in **every attention layer** during inference using **weights** that are part of the model and were learned during training. `Q` and `K` are used to figure out which tokens are relevant to each other, `V` carries the information that gets mixed together based on that relevance, and `O` is the transformed result of the attention calculation. These calculations happen over and over again across tokens and layers, which makes them both **compute- and memory-heavy**. Token `n+1` usually needs to have access to the `Q`, `K`, `V`, and `O`s of every other token that comes before it (`0..n+1)` and itself, so the a bigger context window means more work.
 
 ### Prefill
 
