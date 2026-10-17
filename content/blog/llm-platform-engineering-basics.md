@@ -576,20 +576,16 @@ In practical terms, when we prompt any LLM there is a slight **pause** before it
 
 #### What prefill actually does
 
-```text
-Take me to the nearest OTP bank.
-```
-
-All 8 tokens already exist when the request arrives at the model (because your whole prompt is submitted). **Causal attention** still means each position can only see itself and earlier positions, but since all tokens are present the **GPU can start processing our prompt in parallel!** (instead of _autoregressively_ which we will come back to in the next section)
+All tokens already exist when the request arrives at the model (because your whole prompt is submitted). **Causal attention** still means each position can only see itself and earlier positions, but since all tokens are present the **GPU can start processing our prompt in parallel!** (instead of _autoregressively_ which we will come back to in the next section)
 In every attention layer, `Q`, `K`, and `V` are calculated **for all tokens at the same time**, every token’s `Q` is compared against the `K`s of the tokens it is allowed to see, `V`s get mixed, `o_proj` does its thing, and the result moves on to the next layer:
 
-![Prefill parallel](/blog/images/llm-platform-engineering-overview/prefill-parallel.png)
+![Parallel prefill](/blog/images/llm-platform-engineering-overview/prefill-parallel.png)
 
 This parallel processing is really **important**. Back in our **GPU section** I said that there's a part of inference which is really **compute heavy** -- well guess what, it's **prefill**.
 On a super high level, during prefill the **model** gets loaded out of the `VRAM` (in chunks) of our expensive GPU **once** into the arithmetic units and caches, and then **thousands** of GPU cores (the specialized tensor cores we've touched on) start firing **at the same time** for all of our input tokens to do the calculations required to produce the first token:
 
-![gpu-arith](/blog/images/llm-platform-engineering-overview/gpu-arith.png)
+![Model load once](/blog/images/llm-platform-engineering-overview/gpu-arith.png)
 
-Imagine how much compute power is required for a prompt that is made up of **100.000 tokens**! However this also tells us one interesting thing: since all input tokens are processed at once, the GPU loads the **model** from its memory only **one time** during prefill. This is one of the reasons why prefill does not need **high memory bandwith**.
+Imagine how much compute power is required for a prompt that is made up of **100.000 tokens**! However this also tells us one interesting thing: since all input tokens are processed at once, the GPU loads the **model** from its memory only **one time** during prefill -- this is one of the reasons why prefill does not need **high memory bandwith**.
 
 So now we understand the resource requirement characteristics of prefill, but you could ask the question: this much compute power only to produce 1 token, lol? Well... not quite.
