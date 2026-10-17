@@ -40,6 +40,8 @@ You could ask me who the target audience for this series is.... and honestly? Me
 
 This article in particular is going to be a **dense and theory-heavy** and won't have a lot to do with platform engineering, but the truth is that we must understand many things about LLM inference architecture just enough (_as platform engineers, we don't really care about the underlying math of the models, SoftMax functions, tensor transformations and so on_) to be able to reason about **operating + debugging + observing + serving** them. I'll try to focus-in on the important and fundamental parts. Don't worry, in the **upcoming parts** of the series we'll actually deploy stuff into K8s, have awesome dashboards in Grafana, understanding model serving, special load balancing, and more.
 
+For the really lazy readers (**I'm talking about you, Dhruv**) every section will have a short Takeaway.
+
 So let's roll.
 
 ## Why are GPUs all the rage now?
