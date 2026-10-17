@@ -574,7 +574,7 @@ There’s also an important **performance consequence** hiding in all of this. W
 **Prefill** is the first big part of the inference workflow. It lasts from submitting our prompt up until the first token is returned to us in the LLM's answer.
 In practical terms, when we prompt any LLM there is a slight **pause** before it starts streaming the answer back -- that **pause** + getting the first token back in the LLM's answer is the prefill phase. You might also notice that the **bigger your prompt, the longer the pause** -- which now should **NOT** surprise you because you know about tokenization, embedding, attention (token `n+1` needs all the stuff from tokens `0..n`), `Q`s, `K`s, `V`s, how each token needs a ton of maths (_billions or trillions of operations_) and more.
 
-## What prefill actually does
+#### What prefill actually does
 
 ```text
 Take me to the nearest OTP bank.
