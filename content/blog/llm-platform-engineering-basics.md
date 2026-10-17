@@ -83,7 +83,7 @@ LLM stands for Large Language **Model**, so it would be great to understand what
 
 ### HuggingFace
 
-[HuggingFace](https://huggingface.co), in essence, is the **GitHub for models**. Here you can browse more than 2 million open-source models, as well as datasets for training models. It's best to get familiar with this website, as later on in our actual tutorials we'll use HuggingFace to download the LLM we are going to be experimenting with (also HF seems to be the industry standard for storing models as of the writing of this article).
+[HuggingFace](https://huggingface.co), in essence, is the **GitHub for models**. Here you can browse more than 2 million open-source model repos, as well as datasets for training models. It's best to get familiar with this website, as later on in our actual tutorials we'll use HuggingFace to download the LLM we are going to be experimenting with (also HF seems to be the industry standard for storing models as of the writing of this article).
 
 ### Inside the model file
 
@@ -138,7 +138,7 @@ If you expected to see a lot of interesting stuff inside the model code, now you
 
 ### Takeaway
 
-A model is nothing but a **file** which contains a bunch of numbers in N-dimensional matrices, aka **tensors**. These numbers were learned via model training and are applied to your input to produce the correct output. We use HuggingFace for storing, distributing and downloading models (we can also store these locally in _PersistentVolumes_ or in cloud object stores btw), and these models use the `.safetensors` extension.
+A model is nothing but a **file** which contains a bunch of numbers in N-dimensional matrices, aka **tensors**. These numbers were learned via model training and are applied to your input to produce the correct output. We use HuggingFace for storing, distributing and downloading models (we can also store these locally in _PersistentVolumes_ or in cloud object stores btw). The file that stores the weights and the meaty stuff has the `.safetensors` extension in newer models.
 
 ## LLM flow high-level overview
 
