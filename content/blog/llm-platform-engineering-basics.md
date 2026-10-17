@@ -550,7 +550,7 @@ which will produce a single value (vector): `[0.72, 0.60]` which is called the *
 Here's a **diagram** I generated with ChatGPT about the above to get the flow across:
 ![K,Q,V layers](/blog/images/llm-platform-engineering-overview/attention-flow-bank.png)
 
-To produce the LLM's final answer however (_"Sure thing boss..."_) it goes through **more maths**, the `Output` is transformed as part of something called the **LM Head**, produces **logits**, and then based on how the model is configured to select from the tokens, etc. etc. and then it will start displaying the output. This is hardcore maths that we don't need to really care about, and we can look at it as a black box.
+To produce the LLM's final answer however (_"Sure thing boss..."_) it goes through **more maths**, the `Output` is transformed as part of something called the **LM Head**, produces **logits**, and then based on how the model is configured to select from the tokens, etc. etc. and then it will start displaying the output. This is maths that we don't need to really care about, and we can look at it as a black box.
 
 #### Why on earth do you need to know this then
 
@@ -567,5 +567,25 @@ There’s also an important **performance consequence** hiding in all of this. W
 
 ### Prefill
 
-**Prefill** is the first part of the inference workflow. It lasts from submitting our prompt up until the first token is returned to us in the LLM's answer (from this article **embedding** that comes after tokenization - _where our prompt's tokens are converted to vectors_ - is the first part of prefill).
-In practical terms, when we prompt any LLM there is a slight **pause** before it starts streaming the answer back -- that pause + getting the first token back in the LLM's answer is the prefill phase. You might also notice that the **bigger your prompt, the longer the pause** -- which now should **NOT** surprise you because you know about tokenization, embedding, attention (token `n+1` needs all the stuff from tokens `0..n`), `Q`s, `K`s, `V`s, how each token needs a ton of maths (_billions or trillions of operations_) and more.
+**Prefill** is the first big part of the inference workflow. It lasts from submitting our prompt up until the first token is returned to us in the LLM's answer.
+In practical terms, when we prompt any LLM there is a slight **pause** before it starts streaming the answer back -- that **pause** + getting the first token back in the LLM's answer is the prefill phase. You might also notice that the **bigger your prompt, the longer the pause** -- which now should **NOT** surprise you because you know about tokenization, embedding, attention (token `n+1` needs all the stuff from tokens `0..n`), `Q`s, `K`s, `V`s, how each token needs a ton of maths (_billions or trillions of operations_) and more.
+
+## What prefill actually does
+
+```text
+Take me to the nearest OTP bank.
+```
+
+All 8 tokens already exist when the request arrives at the model (because your whole prompt is submitted). **Causal attention** still means each position can only see itself and earlier positions, but since all tokens are present the **GPU can start processing our prompt in parallel!** (instead of _autoregressively_ which we will come back to in the next section)
+In every attention layer, `Q`, `K`, and `V` are calculated **for all tokens at the same time**, every token’s `Q` is compared against the `K`s of the tokens it is allowed to see, `V`s get mixed, `o_proj` does its thing, and the result moves on to the next layer:
+
+![Prefill parallel](/blog/images/llm-platform-engineering-overview/prefill-parallel.png)
+
+This parallel processing is really **important**. Back in our **GPU section** I said that there's a part of inference which is really **compute heavy** -- well guess what, it's **prefill**.
+On a super high level, during prefill the **model** gets loaded out of the `VRAM` (in chunks) of our expensive GPU **once** into the arithmetic units and caches, and then **thousands** of GPU cores (the specialized tensor cores we've touched on) start firing **at the same time** for all of our input tokens to do the calculations required to produce the first token:
+
+![gpu-arith](/blog/images/llm-platform-engineering-overview/gpu-arith.png)
+
+Imagine how much compute power is required for a prompt that is made up of **100.000 tokens**! However this also tells us one interesting thing: since all input tokens are processed at once, the GPU loads the **model** from its memory only **one time** during prefill. This is one of the reasons why prefill does not need **high memory bandwith**.
+
+So now we understand the resource requirement characteristics of prefill, but you could ask the question: this much compute power only to produce 1 token, lol? Well... not quite.
