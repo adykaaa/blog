@@ -36,9 +36,11 @@ The answer is simple: **this is not going to stay like this for long**. If you a
 
 Stage 7 might have to wait a bit for a few companies -- but I have a really strong hunch that this is going to be the case for most, and we want to be ready. This series is intended to cover my understanding of the current landscape and to solidify some of what I've learned. The thing that's hard about this in general is the fact that as platform engineers, we have to understand **so much stuff**, and now there's a whole new area we need to dig into. Remember how long it took us to be comfortable with K8s? Now, your `HTTPRoute` setup for your Gateway API implementation is useless. Your `HPA` scaling based on memory/CPU utilization can be thrown out of the window. You'll come across new K8s terminology like `LeaderWorkerSet` and `DisaggregatedSet`. Traditional service meshes won't help you, and you'll come across a ton of new metrics (related to GPU) that will be the heart of operating LLMs. TL,DR: a fun journey lies ahead!
 
-NOTE: This particular article is going to be a bit dense and theory-heavy, but the truth is that we must understand many things about LLM architecture just enough (_as platform engineers, we don't really care about the underlying math of the models, SoftMax functions, tensor transformations and so on_) to be able to reason about **operating + debugging + observing + serving** them. I'll try to focus-in on the important and fundamental parts.
+You could ask me who the target audience for this series is.... and honestly? Me. I realized that I solidify concepts much more easily if I write them down -- but I also believe platform engineers who have experience in the field but don't know anything about inference engineering will also benefit from this (or at least I hope). This means that throughout my posts I'm not going to explain basics concepts related to K8s, monitoring, distributed systems, etc. only those that are related to what a particular article is about.
 
-Let's begin.
+This article in particular is going to be a **dense and theory-heavy** and won't have a lot to do with platform engineering, but the truth is that we must understand many things about LLM inference architecture just enough (_as platform engineers, we don't really care about the underlying math of the models, SoftMax functions, tensor transformations and so on_) to be able to reason about **operating + debugging + observing + serving** them. I'll try to focus-in on the important and fundamental parts. Don't worry, in the **upcoming parts** of the series we'll actually deploy stuff into K8s, have awesome dashboards in Grafana, understanding model serving, special load balancing, and more.
+
+So let's roll.
 
 ## Why are GPUs all the rage now?
 
