@@ -143,9 +143,11 @@ A model is nothing but a **file** which contains a bunch of numbers in N-dimensi
 
 ## LLM flow high-level overview
 
-Now that we know why GPUs are used to run LLMs and we know that a model is nothing but a bunch of learned numbers, it's time to look at the high-level flow of how an LLM works and focus in on the important parts that we'll care about later. My hope is that once we get through this looooong article, you'll be able to reason about all parts (and more!) of the below picture:
+Now that we know why GPUs are used to run LLMs and we know that a model is nothing but a bunch of learned numbers, it's time to look at the high-level flow of how an LLM works and focus in on the important parts that we'll care about later.
 
 ![LLM high level architecture](/blog/images/llm-platform-engineering-overview/llm-overview.png)
+
+Once we get through this looooong article, you'll be able to reason about all parts (and more!) of the the above picture I hope.
 
 ### Inference
 
@@ -550,12 +552,12 @@ the model essentially takes our beautiful attention percentages it has calculate
 12.2% × V_bank
 ```
 
-which will produce a single value (vector): `[0.72, 0.60]` which is called the **attention output for the token `bank`** for **one** attention head. Then the model takes **all** of these attention **outputs** from **all the attention heads** from within a layer, uses the `o_proj.weight` to do some math on them which then produces `O` aka. the `Output` of the **attention part of the layer**. This `O` is not the final output of a layer, and deffo not the final output that will come up on your screen!
+which will produce a single value (vector): `[0.72, 0.60]` which is called the **attention output for the token `bank`** for **one** attention head. Then the model takes **all** of these attention **outputs** from **all the attention heads** from within a layer, uses the `o_proj.weight` to do some math on them which then produces `O` aka. the `Output` of the **attention part of the layer**. This `O` is not the final output of a layer, and deffo not the final output that will come up on your screen though.
 
 Here's a **diagram** I generated with ChatGPT about the above to get the flow across:
 ![K,Q,V layers](/blog/images/llm-platform-engineering-overview/attention-flow-bank.png)
 
-To produce the LLM's final answer however (_"Sure thing boss..."_) it goes through **more maths**, the `Output` is transformed as part of something called the **LM Head**, produces **logits** (_the model’s raw unnormalized scores for each possible next token before they’re converted into probabilities_), and then based on how the model is configured to select from the tokens (there are multiple possible token selection strategies and algorithms), etc. etc. and then it will start displaying the output. This is maths that we don't need to really care about, and we can look at it as a black box. If you are interested:
+To produce the LLM's final answer however (_"Sure thing boss..."_) it goes through **more maths**, the `Output` is transformed as part of something called the **LM Head**, produces **logits** (_the model’s raw unnormalized scores for each possible next token before they’re converted into probabilities_), and then based on how the model is configured to select from the tokens (there are multiple possible token selection strategies and algorithms), etc. and then it will start displaying the output. This is maths that we don't need to really care about, and we can look at it as a black box. If you are interested:
 
 - good article on [logits](https://illuri-sandeep5454.medium.com/logits-vs-probabilities-understanding-neural-network-outputs-clearly-0e86a4256a0e)
 - good article on [token selection](https://machinelearningmastery.com/the-statistics-of-token-selection-logits-temperature-and-top-p-walkthrough/)
@@ -607,4 +609,6 @@ One really trivial question has not been asked so far. Why is this phase called 
 
 #### Takeaway
 
-Prefill is the first big model-execution phase of inference. It processes the uncached input context across token positions in parallel and produces the first output token. Because the GPU can reuse chunks of model weights (loaded from HBM) across many token calculations, prefill has high arithmetic intensity and is heavily **compute-bound**. `TTFT` (Time To First Token) is an important metric of prefill.
+Prefill is the first big model-execution phase of inference. It processes the _uncached_ input context across token positions in parallel and produces the first output token. Because the GPU can reuse chunks of model weights (loaded from HBM) across many token calculations, prefill has high arithmetic intensity and is heavily **compute-bound**. `TTFT` (Time To First Token) is an important metric of prefill.
+
+### Decode
