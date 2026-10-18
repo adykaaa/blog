@@ -21,24 +21,25 @@ toc: true
 
 ## Intro
 
-LLM (Inference) Platform Engineering is an area that is becoming increasingly popular due to the widespread use of LLMs everywhere. If we think about it, it makes perfect sense: you are not writing code by hand anymore, are you? :)
+Inference Platform Engineering is an area that is becoming increasingly popular due to the widespread use of LLMs everywhere. If we think about it, it makes perfect sense: you are not writing code by hand anymore, are you? :)
 However, the LLM you prompt to design a rocket ship and tell "should not make mistakes pls" needs to **run somewhere**. Today, 99% of the time, you don't care where. You just fire up Claude or the latest version of ChatGPT, which reads your prompt, waits a bit, and spits out the answer -- so you might ask: why would I even need to understand this?
 
-The answer is simple: **this is not going to stay like this for long**. If you are working as part of an organization (mid-sized or big), you might have gone through the following stages (flawlessly communicated by your leadership, obviously):
+The answer is simple: **this is not going to stay like this for long**. If you are working as part of an organization (mid-sized or big), you might have gone through the following stages (flawlessly communicated by your leadership):
 
 1. **Stage 1:** LLMs are dangerous. We need to use them with caution!
 2. **Stage 2:** LLMs are super capable. Let's ship more features!
 3. **Stage 3:** Our whole company is an AI-first company now (which is super unique because every other company is an AI-first company now, and these two letters are attracting VC money like blood attracts sharks).
-4. **Stage 4:** We are counting how many tokens you are using and we'll make it part of your performance evaluation! (ffs...)
-5. **Stage 5:** Well... this is costing us a lot of money (since Anthropic realized its monopoly situation, it started raising its prices like craaazy), so please use it carefully: only use higher-tier models if necessary, and use the dumber models for everything else.
-6. **Stage 6:** OMG, this is really expensive. We are limiting everyone to X dollars per month (where X gets spent in a week)!
-7. **Stage 7:** Couldn't we just host it ourselves using open-source models and "only pay for the infra"?
+4. **Stage 4:** We are counting how many tokens you are using and we'll make it part of your performance evaluation to make sure you are using AI a lot! (ffs...)
+5. **Stage 5:** Well... this is costing us a lot of money now, so please use it carefully: only use higher-tier models if necessary, and use the dumber models for everything else.
+6. **Stage 6:** OMG, this is really expensive. We told everyone to use AI for everything, and they did! What a shocker. Meanwhile Anthropic and OpenAI are raising prices like there's no tomorrow... ok, we are limiting everyone to X dollars per month (where X gets spent in a week) to stop this madness.
+7. **Stage 7:** People are complaining that they reach the $ limit too fast, we are spending way too much on this...Couldn't we just host a few models ourselves using open-source models and "only pay for the infra"?
 
 Stage 7 might have to wait a bit for a few companies -- but I have a really strong hunch that this is going to be the case for most, and we want to be ready. This series is intended to cover my understanding of the current landscape and to solidify some of what I've learned. The thing that's hard about this in general is the fact that as platform engineers, we have to understand **so much stuff**, and now there's a whole new area we need to dig into. Remember how long it took us to be comfortable with K8s? Now, your `HTTPRoute` setup for your Gateway API implementation is useless. Your `HPA` scaling based on memory/CPU utilization can be thrown out of the window. You'll come across new K8s terminology like `LeaderWorkerSet` and `DisaggregatedSet`. Traditional service meshes won't help you, and you'll come across a ton of new metrics (related to GPU) that will be the heart of operating LLMs. TL,DR: a fun journey lies ahead!
 
-You could ask me who the target audience for this series is.... and honestly? Me. I realized that I solidify concepts much more easily if I write them down -- but I also believe platform engineers who have experience in the field but don't know anything about inference engineering will also benefit from this (or at least I hope). This means that throughout my posts I'm not going to explain basics concepts related to K8s, monitoring, distributed systems, etc. only those that are related to what a particular article is about.
+You could ask me who the target audience for this series really is.... and honestly? **Me**. I realized that I solidify concepts much more easily if I write them down -- but I also believe platform engineers who have experience in the field but don't know anything about inference engineering will also benefit from this (_or at least I hope_). This means that throughout my posts I'm not going to explain basics concepts related to K8s, monitoring, distributed systems, etc. only those that are related to what a particular article is about.
 
-This article in particular is going to be a **dense and theory-heavy** and won't have a lot to do with platform engineering, but the truth is that we must understand many things about LLM inference architecture just enough (_as platform engineers, we don't really care about the underlying math of the models, SoftMax functions, tensor transformations and so on_) to be able to reason about **operating + debugging + observing + serving** them. I'll try to focus-in on the important and fundamental parts. Don't worry, in the **upcoming parts** of the series we'll actually deploy stuff into K8s, have awesome dashboards in Grafana, understanding model serving, special load balancing, and more.
+This article in particular is going to be a **dense and theory-heavy** and won't have a lot to do with platform engineering, but the truth is that we must understand many things about LLM inference architecture just enough (_as platform engineers, we don't really care about the underlying math of the models, SoftMax functions, tensor transformations and so on_) to be able to reason about **operating + debugging + observing + serving** them. I'll try to focus-in on the important and fundamental parts.
+Don't worry, in the **upcoming parts** of the series we'll actually deploy stuff into K8s, have awesome dashboards in Grafana, understanding model serving, special load balancing, and more.
 
 For the really lazy readers (**I'm talking about you, Dhruv**) every section will have a short Takeaway.
 
@@ -554,7 +555,10 @@ which will produce a single value (vector): `[0.72, 0.60]` which is called the *
 Here's a **diagram** I generated with ChatGPT about the above to get the flow across:
 ![K,Q,V layers](/blog/images/llm-platform-engineering-overview/attention-flow-bank.png)
 
-To produce the LLM's final answer however (_"Sure thing boss..."_) it goes through **more maths**, the `Output` is transformed as part of something called the **LM Head**, produces **logits**, and then based on how the model is configured to select from the tokens, etc. etc. and then it will start displaying the output. This is maths that we don't need to really care about, and we can look at it as a black box.
+To produce the LLM's final answer however (_"Sure thing boss..."_) it goes through **more maths**, the `Output` is transformed as part of something called the **LM Head**, produces **logits** (_the model’s raw unnormalized scores for each possible next token before they’re converted into probabilities_), and then based on how the model is configured to select from the tokens (there are multiple possible token selection strategies and algorithms), etc. etc. and then it will start displaying the output. This is maths that we don't need to really care about, and we can look at it as a black box. If you are interested:
+
+- good article on [logits](https://illuri-sandeep5454.medium.com/logits-vs-probabilities-understanding-neural-network-outputs-clearly-0e86a4256a0e)
+- good article on [token selection](https://machinelearningmastery.com/the-statistics-of-token-selection-logits-temperature-and-top-p-walkthrough/)
 
 #### Why on earth do you need to know this then
 
@@ -567,25 +571,38 @@ There’s also an important **performance consequence** hiding in all of this. W
 
 #### Takeaway
 
-`Q`, `K`, `V`, and `O` are vector representations calculated for **every token** in **every attention layer** during inference using **weights** that are part of the model and were learned during training. `Q` and `K` are used to figure out which tokens are relevant to each other, `V` carries the information that gets mixed together based on that relevance, and `O` is the transformed result of the attention calculation. These calculations happen over and over again across tokens and layers, which makes them both **compute- and memory-heavy**. Token `n+1` usually needs to have access to the `Q`, `K`, `V`, and `O`s of every other token that comes before it (`0..n+1)` and itself, so the a bigger context window means more work.
+`Q`, `K`, `V`, and `O` are vector representations calculated for **every token** in **every attention layer** during inference using **weights** that are part of the model and were learned during training. `Q` and `K` are used to figure out which tokens are relevant to each other, `V` carries the information that gets mixed together based on that relevance, and `O` is the transformed result of the attention calculation. These calculations happen over and over again across tokens and layers, which makes them both **compute- and memory-heavy**. Token `n+1` usually needs to have access to the `Q`, `K`, `V`, and `O`s of every other token that comes before it (`0..n+1)` and itself, so a bigger context window means more work.
 
 ### Prefill
 
-**Prefill** is the first big part of the inference workflow. It lasts from submitting our prompt up until the first token is returned to us in the LLM's answer.
+**Prefill** is the first big phase of the inference workflow. **It lasts from submitting our prompt up until the first token is returned to us in the LLM's answer**.
+
 In practical terms, when we prompt any LLM there is a slight **pause** before it starts streaming the answer back -- that **pause** + getting the first token back in the LLM's answer is the prefill phase. You might also notice that the **bigger your prompt, the longer the pause** -- which now should **NOT** surprise you because you know about tokenization, embedding, attention (token `n+1` needs all the stuff from tokens `0..n`), `Q`s, `K`s, `V`s, how each token needs a ton of maths (_billions or trillions of operations_) and more.
 
-#### What prefill actually does
+#### Parallel processing
 
-All tokens already exist when the request arrives at the model (because your whole prompt is submitted). **Causal attention** still means each position can only see itself and earlier positions, but since all tokens are present the **GPU can start processing our prompt in parallel!** (instead of _autoregressively_ which we will come back to in the next section)
+All tokens already exist when the request arrives at the model (because your whole prompt is submitted). **Causal attention** still means each position can only see itself and earlier positions, but since all tokens are present the **GPU can start processing our prompt in parallel!** (instead of _autoregressively_ which we will come back to in the next section).
 In every attention layer, `Q`, `K`, and `V` are calculated **for all tokens at the same time**, every token’s `Q` is compared against the `K`s of the tokens it is allowed to see, `V`s get mixed, `o_proj` does its thing, and the result moves on to the next layer:
 
 ![Parallel prefill](/blog/images/llm-platform-engineering-overview/prefill-parallel.png)
 
 This parallel processing is really **important**. Back in our **GPU section** I said that there's a part of inference which is really **compute heavy** -- well guess what, it's **prefill**.
-On a super high level, during prefill the **model** gets loaded out of the `VRAM` (in chunks) of our expensive GPU **once** into the arithmetic units and caches, and then **thousands** of GPU cores (the specialized tensor cores we've touched on) start firing **at the same time** for all of our input tokens to do the calculations required to produce the first token:
+On a super high level, during prefill the **model** gets loaded out of the `VRAM` (in batches) **once** into the arithmetic units and caches, and then **thousands of GPU cores** (the specialized _tensor_ cores we've touched on) start firing **at the same time** for all of our input tokens to do the calculations required to produce the first token:
 
 ![Model load once](/blog/images/llm-platform-engineering-overview/gpu-arith.png)
 
-Imagine how much compute power is required for a prompt that is made up of **100.000 tokens**! However this also tells us one interesting thing: since all input tokens are processed at once, the GPU loads the **model** from its memory only **one time** during prefill -- this is one of the reasons why prefill does not need **high memory bandwith**.
+Well, the most precise phrasing of this would be to say that the calculations are firing for the whole **input context**, not just your input tokens. If a chatbot LLM has something in its context by default (`You are a helpful chat assistant. Here's a thousand page summary of our products' FAQ: [...]`) then it also gets processed alongside our prompt `How can I refund this garbage lawnmower?` in an unoptimized system (in a real production system the system prompt is cached, but more on this later).
 
-So now we understand the resource requirement characteristics of prefill, but you could ask the question: this much compute power only to produce 1 token, lol? Well... not quite.
+Prefill moves a huge amount of data from the GPU's `HBM` (High Bandwith Memory), but it gets much more computation out of every byte it moves. This high arithmetic intensity is why prefill tends to be **limited by compute** (_TFLOPS of your GPU_) rather than **memory bandwidth**.
+
+#### TTFT
+
+One important metric that we need to take note of is `TTFT` (**Time To First Token**). As highlighted in the definition of prefill, it lasts from sending all of our input tokens to the LLM up until the first token shows up.
+
+`TTFT` is important because it highly impacts UX. If your users have to wait for 30 seconds for an answer to show up, they are going to start complaining (rightfully so).
+
+You might think that `TTFT` is only affected by the speed of **prefill** (aka. how fast those thousand GPU tensor cores can do the calculations to come up with the first token of the answer), but in real production systems this is not the case. There are several optimizations we are going to touch in a later article (like queueing, batching, prefix caching, intelligent scheduling, etc.) that are also part of calculating `TTFT`, but more on this later.
+
+#### Takeaway
+
+Prefill is the first big model-execution phase of inference. It processes the uncached input context across token positions in parallel and produces the first output token. Because the GPU can reuse chunks of model weights (loaded from HBM) across many token calculations, prefill has high arithmetic intensity and is heavily **compute-bound**. `TTFT` (Time To First Token) is an important metric of prefill.
