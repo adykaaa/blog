@@ -47,14 +47,14 @@ So let's roll.
 
 ## Why are GPUs all the rage now?
 
-As far as raw resources are concerned, we've only had to deal with disk, CPU, and memory. Disk space has been a non-factor for a long time because SSDs and HDDs have become dirt cheap. Memory and CPU, on the other hand, have always been considered precious resources, so our focus has been on these two -- however, all you keep hearing about is how expensive GPUs are because of AI.
-We know that computation happens on the CPU -- so why on earth can't we keep using it for LLM workloads? Those require computation, just like the server running my awesome backend rewritten in Rust, right? Well, no.
+As far as raw resources are concerned, we've only had to deal with disk, CPU, and memory. Disk space has not been an issue for a long time because SSDs and HDDs have become dirt cheap (_unless we are talking about huge scale_). Memory and CPU, on the other hand, have always been considered precious resources because VMs are expensive, so our focus has been on these two -- however, all you keep hearing about is how expensive GPUs are because of AI, models run on GPUs, you need to take a loan to buy a damn RTX 5070 to be able to play games on high res, and so on.
+We know that for the workloads we are used to, computation happens on the CPU -- so why on earth can't we keep using it for LLM workloads? Those require computation, just like the server running my awesome backend rewritten in Rust, right? Well, no.
 
 ### Cores and memory bandwidth
 
 ![CPU vs GPU architecture](/blog/images/llm-platform-engineering-overview/gpu-vs-cpu-blog.jpg)
 
-Without going into too much unnecessary detail about the actual hardware architecture of CPUs and GPUs, the main thing to remember is that CPUs have a **few powerful cores** that are great at executing a smaller number of complex instructions (compared to the GPU) very quickly: application logic, web servers, databases, operating systems -- so operations that require a lot of branching and complexity. GPUs, on the other hand, have **thousands of smaller cores** that are great at executing simple arithmetic operations (a LOT of them) over and over again. Spoiler alert: LLMs require the latter.
+Without going into too much details about the actual hardware architecture of CPUs and GPUs, the main thing to remember is that **CPUs** have a **few powerful cores** that are great at executing a smaller number of complex instructions (compared to the GPU) very quickly: application logic, web servers, databases, operating systems -- so operations that require a lot of branching and complexity. **GPUs** on the other hand, have **thousands of smaller cores** that are great at executing simple arithmetic operations (a LOT of them) over and over again. Spoiler alert: LLMs require the latter.
 
 Another issue is **bandwidth**: high-end server CPUs are capable of moving a _few hundred GB_ per second from RAM (DRAM → memory controller → CPU caches (L3/L2/L1) → registers/vector units → computation), whereas GPUs are capable of moving _multiple TB_ per second from their high-bandwidth memory units towards the computation cores (HBM → GPU cache/shared memory/registers → tensor cores → computation). **HBM** stands for High Bandwidth Memory, which is specifically designed for ultra-high bandwidth and low latency, and tensor cores are a type of GPU core specialized at the hardware level to perform billions of **matrix operations** faster than any "regular" cores.
 
@@ -593,9 +593,25 @@ On a super high level, during prefill the **model** gets loaded out of the `VRAM
 
 ![Model load once](/blog/images/llm-platform-engineering-overview/gpu-arith.png)
 
-Well, the most precise phrasing of this would be to say that the calculations are firing for the whole **input context**, not just your input tokens. If a chatbot LLM has something in its context by default (`You are a helpful chat assistant. Here's a thousand page summary of our products' FAQ: [...]`) then it also gets processed alongside our prompt `How can I refund this garbage lawnmower?` in an unoptimized system (in a real production system the system prompt is cached, but more on this later).
+We can see that prefill moves a huge amount of data from the GPU's `HBM` (High Bandwith Memory), but it gets much more computation out of every byte it moves. This high arithmetic intensity is why prefill tends to be **limited by compute** (_TFLOPS of your GPU_) rather than **memory bandwidth**.
 
-Prefill moves a huge amount of data from the GPU's `HBM` (High Bandwith Memory), but it gets much more computation out of every byte it moves. This high arithmetic intensity is why prefill tends to be **limited by compute** (_TFLOPS of your GPU_) rather than **memory bandwidth**.
+The most precise phrasing would be to say that the calculations are firing for the whole **input context**, not just your input tokens. If a chatbot LLM has something in its context by default (`You are a helpful chat assistant. Here's a thousand page summary of our products' FAQ: [...]`) then it also gets processed alongside our prompt `How can I refund this garbage lawnmower?` in an unoptimized system (in a real production system the system prompt is cached, but more on this later).
+
+You might also ask the question: **why does this phase only compute the first output token** in the LLM's answer?
+
+The answer comes down to **what we've learnt so far**. If we have a prompt:
+
+```text
+Take me to the nearest OTP bank.
+```
+
+and e.g the output of the LLM is:
+
+```text
+Sure thing boss. The nearest OTP bank is located on the 4th Street in the 9th District in Budapest.
+```
+
+All of the tokens are run through in parallel from the input during prefill (because all of the tokens are known before compute time as the user inputs them at once), the calculations happen, and then a new token gets picked by the model as the first token of the answer. To generate the next token however (the second one -- `thing`), the model needs to know what the first token was (remember **attention** and everything?). So for `Sure` to be generated, the model needed the calculations for `["Take", "me", "to", "the", "nearest", "OTP", "bank", "."]` which was knocked out in parallel, but for the second token of the answer it now needs `["Take", "me", "to", "the", "nearest", "OTP", "bank", ".", +++ ->"Sure"]` and so on. As we can see, generating the answer becomes **sequental** because only 1 new token appears in the answer each time. This sequental token generation is part of a process called **decode** and is gonna be our next section.
 
 #### TTFT
 
@@ -605,10 +621,12 @@ One important metric that we need to take note of is `TTFT` (**Time To First Tok
 
 You might think that `TTFT` is only affected by the speed of **prefill** (aka. how fast those thousand GPU tensor cores can do the calculations to come up with the first token of the answer), but in real production systems this is not the case. There are several optimizations we are going to touch in a later article (like queueing, batching, prefix caching, intelligent scheduling, etc.) that are also part of calculating `TTFT`, but more on this later.
 
-One really trivial question has not been asked so far. Why is this phase called prefill? What are we prefilling? Stay tuned to find out.
+One really trivial question has not been asked so far however. **Why is this phase called prefill**? What are we prefilling? Stay tuned to find out.
 
 #### Takeaway
 
 Prefill is the first big model-execution phase of inference. It processes the _uncached_ input context across token positions in parallel and produces the first output token. Because the GPU can reuse chunks of model weights (loaded from HBM) across many token calculations, prefill has high arithmetic intensity and is heavily **compute-bound**. `TTFT` (Time To First Token) is an important metric of prefill.
 
-### Decode
+### Decode and the KV Cache
+
+Decode is the second and final big phase of the inference workflow where the output tokens are generated and **streamed** (aka. the LLM answers your prompt). From the previous section we've already touched on the fact that this phase is **sequental** by nature, but let's
