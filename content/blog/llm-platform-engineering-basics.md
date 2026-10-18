@@ -603,6 +603,8 @@ One important metric that we need to take note of is `TTFT` (**Time To First Tok
 
 You might think that `TTFT` is only affected by the speed of **prefill** (aka. how fast those thousand GPU tensor cores can do the calculations to come up with the first token of the answer), but in real production systems this is not the case. There are several optimizations we are going to touch in a later article (like queueing, batching, prefix caching, intelligent scheduling, etc.) that are also part of calculating `TTFT`, but more on this later.
 
+One really trivial question has not been asked so far. Why is this phase called prefill? What are we prefilling? Stay tuned to find out.
+
 #### Takeaway
 
 Prefill is the first big model-execution phase of inference. It processes the uncached input context across token positions in parallel and produces the first output token. Because the GPU can reuse chunks of model weights (loaded from HBM) across many token calculations, prefill has high arithmetic intensity and is heavily **compute-bound**. `TTFT` (Time To First Token) is an important metric of prefill.
