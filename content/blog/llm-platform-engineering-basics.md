@@ -629,6 +629,20 @@ Prefill is the first big model-execution phase of inference. It processes the (_
 
 ### Decode and the KV Cache
 
-Decode is the second and final big phase of the inference workflow where the output tokens are generated and **streamed** (aka. the LLM answers your prompt). From the **prefill** section we've already touched on the fact that the **decode phase is sequental** by nature, meaning the LLM's answer is generated one token at a time -- the reason for this is (as we've mentioned this a thousand times already) that token `n+1` needs to have the information of all tokens before it (`(0..n+1)` inclusive). The way you'll hear this phrased is **autoregressive token generation**.
+Decode is the second and final big phase of the inference workflow where the output tokens are generated and **streamed** (aka. the LLM answers your prompt). From the **prefill** section we've already touched on the fact that the **decode phase is sequental** by nature, meaning the LLM's answer is generated one token at a time -- the reason for this is (as we've mentioned this a thousand times already) that token `n+1` needs to have the information of all tokens before it (`(0..n+1)` inclusive). The way you'll hear this phrased is **autoregressive token generation**:
 
 ![Decode gif](/blog/images/llm-platform-engineering-overview/decode-gif.gif)
+
+This also brings up an interesting point about **GPU resource usage** and what the **bottlenecks** are. Remember that in our GPU section we said that the GPU numbers we generally care about are:
+
+- compute
+- capacity
+- memory bandwith
+
+The **capacity** requirement characteristics are the same for both prefill and decode. Capacity roughly means how much `VRAM` a GPU has to store the **model**.
+
+During **prefill** we have many input tokens to process at the same time. The GPU can load model weights and then perform a huge number of calculations across those tokens in parallel, so we get a lot of maths done for the data that we move from HBM. We move the same data for ALL the input tokens one time (_not at once_) from HBM into the arithmetic units, and do a bunch of calculations for them -- meaning that in general, **for prefill compute is going to be the bottleneck**.
+
+For **decode** however the resource constraints change quite a bit. To be absolutely clear, decode uses the exact same things in the model as prefill for coming up with the next token: uses the same GPU cores for compute, the same model weights, calculates attention, `Q`, `K`, `V`, `O`, uses the `LM head`, produces `logits`, chooses the output token based on the selection algorithm, etc. etc. **but instead of doing it for multiple tokens, it does it for only one at a time** (_the next streamed output token as the result of autoregressive generation_). This means that for each produced output token, the GPU has to load the model, do a bit of maths, produce the output token, and then repeat -- resulting in **high memory bandwith usage** but underutilizes **compute**.
+
+![Decode vs Prefill GPU resources](/blog/images/llm-platform-engineering-overview/prefill-vs-decode-gpu-resources.png)
