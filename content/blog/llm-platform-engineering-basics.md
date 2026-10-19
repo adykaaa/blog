@@ -264,7 +264,7 @@ Tokenization is the process where your prompt for the LLM is turned into simple 
 
 So, now our prompt has become token **ID**s via tokenization, which then became vectors via **embedding lookups**. However, if you take a look at the above section, there's a slight problem related to maths and how words can represent different meanings based on context. **Embedding doesn't account for context**.
 
-If we take a look at this prompt:
+If we take a look at this prompt (_we will use this prompt in multiple sections, and we will assume that each word equals a token for simplicity_):
 
 ```text
 Take me to the nearest OTP bank.
@@ -276,7 +276,7 @@ and this one:
 We sat down next to the river bank.
 ```
 
-the word `bank` will go through the **tokenizer** and produce the same integer **ID**, and thus it will have the same **embedding vector** representations -- but the meaning of the word `bank` is completely different based on which sentence we use it in -- so LLMs need a mechanism to know the **meaning** of the word based on the **context**. This mechanism is called **attention**.
+the token `bank` will go through the **tokenizer** and produce the same integer **ID**, and thus it will have the same **embedding vector** representations -- but the meaning of the word `bank` is completely different based on which sentence we use it in -- so LLMs need a mechanism to know the **meaning** of the word based on the **context**. This mechanism is called **attention**.
 
 At a high level, attention lets **each token** look at the **other tokens** in our prompts and decide how relevant they are when building its next representation. Let's use our bank example again (_this article is quickly becoming an OTP ad. Unfortunately, I'm not sponsored by them..._):
 
@@ -597,7 +597,7 @@ We can see that prefill moves a huge amount of data from the GPU's `HBM` (High B
 
 The most precise phrasing would be to say that the calculations are firing for the whole **input context**, not just your input tokens. If a chatbot LLM has something in its context by default (`You are a helpful chat assistant. Here's a thousand page summary of our products' FAQ: [...]`) then it also gets processed alongside our prompt `How can I refund this garbage lawnmower?` in an unoptimized system (in a real production system the system prompt is cached, but more on this later).
 
-You might also ask the question: **why does this phase only compute the first output token** in the LLM's answer?
+You might also ask the question: **why does this phase only compute the first output token in the LLM's answer**?
 
 The answer comes down to **what we've learnt so far**. If we have a prompt:
 
@@ -608,7 +608,7 @@ Take me to the nearest OTP bank.
 and e.g the output of the LLM is:
 
 ```text
-Sure thing boss. The nearest OTP bank is located on the 4th Street in the 9th District in Budapest.
+Sure thing [....]
 ```
 
 All of the tokens are run through in parallel from the input during prefill (because all of the tokens are known before compute time as the user inputs them at once), the calculations happen, and then a new token gets picked by the model as the first token of the answer. To generate the next token however (the second one -- `thing`), the model needs to know what the first token was (remember **attention** and everything?). So for `Sure` to be generated, the model needed the calculations for `["Take", "me", "to", "the", "nearest", "OTP", "bank", "."]` which was knocked out in parallel, but for the second token of the answer it now needs `["Take", "me", "to", "the", "nearest", "OTP", "bank", ".", +++ ->"Sure"]` and so on. As we can see, generating the answer becomes **sequental** because only 1 new token appears in the answer each time. This sequental token generation is part of a process called **decode** and is gonna be our next section.
@@ -625,8 +625,10 @@ One really trivial question has not been asked so far however. **Why is this pha
 
 #### Takeaway
 
-Prefill is the first big model-execution phase of inference. It processes the _uncached_ input context across token positions in parallel and produces the first output token. Because the GPU can reuse chunks of model weights (loaded from HBM) across many token calculations, prefill has high arithmetic intensity and is heavily **compute-bound**. `TTFT` (Time To First Token) is an important metric of prefill.
+Prefill is the first big model-execution phase of inference. It processes the (_uncached_) input context across token positions in parallel and produces the first output token. Because the GPU can reuse chunks of model weights (loaded from HBM) across many token calculations, prefill has high arithmetic intensity and is heavily **compute-bound**, not **memory bandwith bound**. `TTFT` (Time To First Token) is an important metric that impacts UX.
 
 ### Decode and the KV Cache
 
-Decode is the second and final big phase of the inference workflow where the output tokens are generated and **streamed** (aka. the LLM answers your prompt). From the previous section we've already touched on the fact that this phase is **sequental** by nature, but let's
+Decode is the second and final big phase of the inference workflow where the output tokens are generated and **streamed** (aka. the LLM answers your prompt). From the **prefill** section we've already touched on the fact that the **decode phase is sequental** by nature, meaning the LLM's answer is generated one token at a time -- the reason for this is (as we've mentioned this a thousand times already) that token `n+1` needs to have the information of all tokens before it (`(0..n+1)` inclusive). The way you'll hear this phrased is **autoregressive token generation**.
+
+![Decode gif](/blog/images/llm-platform-engineering-overview/decode-gif.gif)
