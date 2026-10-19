@@ -639,7 +639,7 @@ This also brings up an interesting point about **GPU resource usage** and what t
 - capacity
 - memory bandwith
 
-The model-weight capacity requirement is basically the same for prefill and decode: the model still has to fit into GPU memory, but total memory usage isn't necessarily the same, because there are other things occupying VRAM as well. One particularly important one is the KV cache, which we'll get to in the next section.
+The model-weight capacity requirement is basically the same for prefill and decode: the model still has to fit into GPU memory (_but total memory usage isn't necessarily the same, because there are other things occupying VRAM as well, but we'll get to this in the next section_)
 
 During **prefill** we have many input tokens to process at the same time. As the GPU reads model weights from HBM, those weights can be reused to perform calculations across many input token positions in parallel. In other words, we get a LOT of maths done for every byte of model data we move from HBM. This gives prefill relatively **high arithmetic intensity**, which means that for sufficiently large prompts **compute is generally the bottleneck**.
 
@@ -668,13 +668,13 @@ where we store these will be revealed in the next section.
 
 #### Takeaway
 
-Decode is the phase where each output token in our LLM's answer gets generated sequentially. It is bottlenecked by **memory bandwith** because it has to load the weights of the model each time it produces an output token, but only does the calculations for the output token (one at a time) so it underutilizes compute. `TPOT` is an important metric that describes the performance of decode.
+Decode is the phase where each output token in our LLM's answer gets generated sequentially. Prefill gets lots of computation out of each chunk of data moved from HBM to the compute units, decode gets relatively little computation out of each chunk of data moved. `TPOT` is an important metric describing the performance of decode.
 
 ### KV Cache
 
 Finally the section that answers two of the questions left hanging from both **prefill** and **decode**:
 
 - why is prefill called **prefill**? What does it prefill?
-- why don't we store the already calculated stuff somewhere so that autoregressive token generation during decode only needs to calculate new stuff?
+- why don't we **store the already calculated stuff somewhere** so that autoregressive token generation during decode only needs to calculate new stuff?
 
-The answer to both of these is the `KV Cache`!
+The answer to both of these is the `KV Cache`.
