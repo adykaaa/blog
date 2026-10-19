@@ -668,7 +668,7 @@ Where we store these will be revealed in the next section.
 
 #### Takeaway
 
-Decode is the phase where each output token in our LLM's answer gets generated sequentially. Prefill gets lots of computation out of each chunk of data moved from HBM to the compute units, decode gets relatively little computation out of each chunk of data moved. `TPOT` is an important metric describing the performance of decode.
+Decode is the phase where each output token in our LLM's answer gets generated sequentially. Prefill gets lots of computation out of each chunk of data moved from HBM to the compute units, decode gets relatively little computation out of each chunk of data moved and needs to move much more frequently. Hence prefill is compute-bound, while decode is memory-bandwidth-bound. `TPOT` is an important metric describing the performance of decode.
 
 ### KV Cache
 
