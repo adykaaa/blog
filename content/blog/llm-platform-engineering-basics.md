@@ -657,7 +657,7 @@ This is quite an important metric of decode, because it has really strong UX imp
 
 If you've gone through the prefill section and the decode section this far and you haven't shouted at your monitor saying **WE ARE WASTING SO MANY RESOURCES FOR EACH TOKEN THAT WE CALCULATE DURING DECODE!!**, you might need to re-read things again.
 
-If I have an input context of `100.000` tokens, **prefill** calculates the `Q`s, `K`s, `V`s and all that stuff for them, produces the first output token, and then, to produce the second output token, **decode needs all the `Q`s, `K`s, `V`s, etc. for `100.001` tokens only to generate the second output token**. Since we know from our section on **attention** that this is true, does that mean that we are running the same calculations every single time + the calculation required for the new output token? Fortunately, engineers designing LLMs are much smarter than that, and they have come up with a really simple proposition:
+If I have an input context of `100.000` tokens, **prefill** calculates the `Q`s, `K`s, `V`s and all that stuff for them, produces the first output token, and then, to produce the second output token, **decode needs all the `Q`s, `K`s, `V`s, etc. for `100.001` tokens only to generate the second output token**. Since we know from our section on **attention** that this is true, does that mean that we are running the same calculations every single time + the calculation required for the new output token -- wasting a ton of work in each iteration? Fortunately, engineers designing LLMs are much smarter than that, and they have come up with a really simple proposition:
 
 ```text
 Why don't we simply store the already calculated values somewhere,
@@ -675,6 +675,75 @@ Decode is the phase where each output token in our LLM's answer gets generated s
 Finally the section that answers two of the questions left hanging from both **prefill** and **decode**:
 
 - why is prefill called **prefill**? What does it prefill?
-- why don't we **store the already calculated stuff somewhere** so that autoregressive token generation during decode only needs to calculate new stuff?
+- where do we **store the already calculated stuff** so that autoregressive token generation during decode only needs to calculate new stuff?
 
-The answer to both of these is the `KV Cache`.
+The answer to both of these is the `KV Cache`. Prefill is called prefill because it _prefills the KV cache after it runs for all of the input context tokens in parallel_ and we are not throwing away stuff we already calculated -- **decode** will reach into this cache for values.
+
+#### Why only `K` and `V` Cache?
+
+What a weird yet simple name... `KV Cache`. Now you must be thinking: why only `K` and `V` cache? Why not `QKVO Cache`?
+
+During prefill, all of the `Q`, `K`, `V`, and `O`s are calculated for the input context for every token that the model is processing. Let's step back to the definitions for a sec:
+
+```text
+Query = What information am I looking for in other tokens?
+Key   = What kind of information do I contain? (What info do I contain that might match other tokens' Queries?)
+Value = What information do I contribute if another token finds me relevant?
+Output = Combined output of the above
+```
+
+According to these (_and what we've learned in that section hopefully_), we can see that once the next token goes through processing there are two of the above vectors that will remain unchanged, no matter the token we are processing them for: `K` and `V`.
+
+Let's say we've already processed:
+
+```text
+Take me to the nearest OTP bank.
+```
+
+and the model has generated the first token of our answer:
+
+```text
+Sure
+```
+
+`Sure` gets a hot new `Q`:
+
+```text
+Q_sure = What information does "Sure" need from the tokens before it?
+```
+
+`Q_sure` needs to compare itself against the `K`s of all the previous tokens:
+
+```text
+K_take
+K_me
+K_to
+K_the
+K_nearest
+K_OTP
+K_bank
+K_dot
+```
+
+these comparisons tell the **attention mechanism** which previous tokens are **relevant for** `Sure`. Once it figures it out, it uses their corresponding `V`s:
+
+```text
+V_take
+V_me
+V_to
+V_the
+V_nearest
+V_OTP
+V_bank
+V_dot
+```
+
+to actually retrieve the **information contributed by those tokens**. Here's the important bit:
+
+**K_take, V_take, K_me, V_me, K_OTP, V_OTP, etc. have not changed**
+
+Adding `Sure` to the end of the sequence does not suddenly change what information the previous token `OTP` contains or how future tokens should match against it. Its `K` and `V` were calculated when `OTP` was originally processed and because of **causal attention** they remain valid for every token that comes after it.
+
+To be fair the previous tokens' `Q`s and `O`s haven't changed either, the difference is that we just don't care about them anymore.
+
+E.g `Q_OTP` represented what `OTP` was looking for when it was being processed, but it was processed already so we don't need it anymore. When we process `Sure` we need a brand-new `Q_sure` instead. The previous `O`s have also already served their purpose while those tokens were being processed through the model, future attention operations don't need them.
