@@ -396,7 +396,7 @@ So what are `K`, `Q`, `V`, and `O` then? A way of thinking about them is that th
 ```text
 Query = What information am I looking for in other tokens?
 Key   = What kind of information do I contain? (What info do I contain that might match other tokens' Queries?)
-Value = What information do I contribute if another token finds me relevant?
+Value = What information do I contribute to the context of another token if that token finds me relevant?
 Output = Combined output of the above
 ```
 
@@ -688,7 +688,7 @@ During prefill, all of the `Q`, `K`, `V`, and `O`s are calculated for the input 
 ```text
 Query = What information am I looking for in other tokens?
 Key   = What kind of information do I contain? (What info do I contain that might match other tokens' Queries?)
-Value = What information do I contribute if another token finds me relevant?
+Value = What information do I contribute to the context of another token if that token finds me relevant?
 Output = Combined output of the above
 ```
 
@@ -738,12 +738,20 @@ V_bank
 V_dot
 ```
 
-to actually retrieve the **information contributed by those tokens**. Here's the important bit:
+to actually retrieve the **information contributed by those tokens**.
+
+To be fair the previous tokens' `Q`s and `O`s haven't changed either, the difference is that we just don't care about them anymore.
+E.g `Q_OTP` represented what `OTP` was looking for when it was being processed, but it was processed already so we don't need it anymore. When we process `Sure` we need a brand-new `Q_sure` instead. The previous `O`s have also already served their purpose while those tokens were being processed through the model, future attention operations don't need them.
+
+The important part is that:
 
 **K_take, V_take, K_me, V_me, K_OTP, V_OTP, etc. have not changed**
 
 Adding `Sure` to the end of the sequence does not suddenly change what information the previous token `OTP` contains or how future tokens should match against it. Its `K` and `V` were calculated when `OTP` was originally processed and because of **causal attention** they remain valid for every token that comes after it.
 
-To be fair the previous tokens' `Q`s and `O`s haven't changed either, the difference is that we just don't care about them anymore.
+For these reasons (_and more_) **prefill** _prefills_ the cache with `K`s and `V`s of all the tokens it has processed so that when another token goes through the model, they won't have to do these calculations over and over again in vein.
 
-E.g `Q_OTP` represented what `OTP` was looking for when it was being processed, but it was processed already so we don't need it anymore. When we process `Sure` we need a brand-new `Q_sure` instead. The previous `O`s have also already served their purpose while those tokens were being processed through the model, future attention operations don't need them.
+So we are basically here in the process:
+![Prefill KV-cache](/blog/images/llm-platform-engineering-overview/prefill-kv-cache.png)
+
+### Decode and KV Cache
