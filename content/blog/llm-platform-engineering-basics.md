@@ -7,6 +7,7 @@ tags:
         "LLM",
         "Inference",
         "Attention",
+        "Cache",
         "QKV",
         "Overview",
         "Model",
@@ -677,7 +678,7 @@ Finally the section that answers two of the questions left hanging from both **p
 - why is prefill called **prefill**? What does it prefill?
 - where do we **store the already calculated stuff** so that autoregressive token generation during decode only needs to calculate new stuff?
 
-The answer to both of these is the `KV Cache`. Prefill is called prefill because it _prefills the KV cache after it runs for all of the input context tokens in parallel_ and we are not throwing away stuff we already calculated -- **decode** will reach into this cache for values.
+The answer to both of these is the `KV Cache`. Prefill is called prefill because it _prefills the KV cache after it runs for all of the input context tokens in parallel_ so we are not throwing away stuff we already calculated -- **decode** will reach into this cache for values (and also fill this cache when it generates output tokens).
 
 #### Why only `K` and `V` Cache?
 
@@ -692,9 +693,9 @@ Value = What information do I contribute to the context of another token if that
 Output = Combined output of the above
 ```
 
-According to these (_and what we've learned in that section hopefully_), we can see that once the next token goes through processing there are two of the above vectors that will remain unchanged, no matter the token we are processing them for: `K` and `V`.
+According to these (_and what we've learned in that section hopefully_) definitions, we can see that once the next token goes through processing there are two of the above vectors that will remain unchanged after the calculations, no matter the token we are processing them for: `K` and `V` because they describe what a token **contains** irrespective of what another token is looking for.
 
-Let's say we've already processed:
+Back to the bank example :) let's say we've already processed:
 
 ```text
 Take me to the nearest OTP bank.
@@ -749,9 +750,111 @@ The important part is that:
 
 Adding `Sure` to the end of the sequence does not suddenly change what information the previous token `OTP` contains or how future tokens should match against it. Its `K` and `V` were calculated when `OTP` was originally processed and because of **causal attention** they remain valid for every token that comes after it.
 
-For these reasons (_and more_) **prefill** _prefills_ the cache with `K`s and `V`s of all the tokens it has processed so that when another token goes through the model, they won't have to do these calculations over and over again in vein.
+For these reasons (_and more_) **prefill** _prefills_ the cache with `K`s and `V`s of all the tokens it has processed so that when another token goes through the model, they won't have to do these calculations over and over again in vein (of course, the new token's `K`s and `V`s are also added to the cache once the model has calculated them, and so on).
 
 So we are basically here in the process:
 ![Prefill KV-cache](/blog/images/llm-platform-engineering-overview/prefill-kv-cache.png)
 
 ### Decode and KV Cache
+
+In the **decode** section we said that all work that prefill has done for calculating the tokens is not wasted, which we have proven above. We have also said that during decode the model does **autoregressive generation** meaning the process of coming up with the output tokens is mostly sequential (_there are some [optimizations and techniques](https://developer.nvidia.com/blog/an-introduction-to-speculative-decoding-for-reducing-latency-in-ai-inference/) to get around this, but we'll talk about this in a much later article_) because token `n+1` needs the info from token `0..n`.
+
+During decode every newly generated token gets processed through the model but instead of recalculating the Ks and Vs for the entire context again, **the attention layers simply reach into the KV Cache and reuse the ones we've already calculated**.
+
+After prefill we have processed:
+
+```text
+Take me to the nearest OTP bank.
+```
+
+and our KV Cache already contains the `K`s and `V`s belonging to those tokens:
+
+KV Cache:
+
+```text
+Take -> K_take, V_take
+me -> K_me, V_me
+to -> K_to, V_to
+the -> K_the, V_the
+nearest -> K_nearest, V_nearest
+OTP -> K_OTP, V_OTP
+bank -> K_bank, V_bank
+. -> K_dot, V_dot
+```
+
+prefill also generated the first output token:
+
+```text
+Sure
+```
+
+Now decode needs to process `Sure` in order to figure out what comes **next**. The model calculates the new token's `Q`, `K` and `V`:
+
+```text
+Sure -> Q_sure, K_sure, V_sure
+```
+
+but instead of recalculating:
+
+```text
+K_take
+K_me
+K_to
+K_the
+K_nearest
+K_OTP
+K_bank
+K_dot
+```
+
+and all their corresponding `V`s, it simply retrieves them from the `KV Cache` so that `Q_sure` can then attend against all of those cached `K`s and use their corresponding cached `V`s! Awesome.
+
+The model continues processing `Sure` through the rest of its layers and eventually produces the next token:
+
+```text
+thing
+```
+
+Before moving on tho **we don't throw away the newly calculated `K_sure` and `V_sure`**. We add them to the KV Cache:
+
+```text
+KV Cache:
+
+Take     -> K_take,     V_take
+me       -> K_me,       V_me
+to       -> K_to,       V_to
+the      -> K_the,      V_the
+nearest  -> K_nearest,  V_nearest
+OTP      -> K_OTP,      V_OTP
+bank     -> K_bank,     V_bank
+.        -> K_dot,      V_dot
+Sure     -> K_sure,     V_sure      <- NEW
+```
+
+When `thing` gets processed, it gets its own fresh
+
+```text
+Q_thing
+K_thing
+V_thing
+```
+
+and `Q_thing` can now attend against the cached Ks and Vs of:
+
+```text
+Take
+me
+to
+the
+nearest
+OTP
+bank
+.
+Sure
+```
+
+and then add its own `K`s and `V`s, and so on until the whole decode process is finished and the answer is given by the LLM!
+
+![Decode KV-cache](/blog/images/llm-platform-engineering-overview/decode-kv-cache.png)
+
+#### But where does the KV Cache live?
