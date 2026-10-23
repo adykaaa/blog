@@ -938,4 +938,4 @@ This means GPU capacity isn't only about whether the model fits, but it also det
 
 If you've come this far dear reader, you are my personal hero. This was quite a long one, and we haven't even done anything fun or practical. However, we have hopefully gone from looking at LLMs as these magic things knowing everything somehow, to now understanding that everything is just..... maths. _Sigh_.
 
-Now that we understand the most important parts of the inference workflow on a high level, we can start looking at more practical examples, and build our understanding further. In the next article we will serve our first model, talk about what the heck `vLLM` is, and observe a few things. LFG!
+Now that we understand the most important parts of the inference workflow on a high level, we can start looking at more practical examples, and build our understanding further. In the next article we will serve our first model, talk about what the heck `vLLM` is and more. LFG!
