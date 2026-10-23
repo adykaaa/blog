@@ -1,6 +1,6 @@
 ---
 title: "LLM Inference Platform Engineering - Part 1 - Overview of the Beast"
-date: 2026-10-10T18:00:00+02:00
+date: 2026-10-24T18:00:00+02:00
 description: "The first part of my LLM Inference Platform Engineering series, providing a high-level overview of the inference process."
 tags:
     [
@@ -33,7 +33,7 @@ The answer is simple: **this is not going to stay like this for long**. If you a
 4. **Stage 4:** We are counting how many tokens you are using and we'll make it part of your performance evaluation to make sure you are using AI a lot! (ffs...)
 5. **Stage 5:** Well... this is costing us a lot of money now, so please use it carefully: only use higher-tier models if necessary, and use the dumber models for everything else.
 6. **Stage 6:** OMG, this is really expensive. We told everyone to use AI for everything, and they did! What a shocker. Meanwhile Anthropic and OpenAI are raising prices like there's no tomorrow... ok, we are limiting everyone to X dollars per month (where X gets spent in a week) to stop this madness.
-7. **Stage 7:** People are complaining that they reach the $ limit too fast, we are spending way too much on this... Couldn't we just host a few models ourselves using open-source models and "only pay for the infra"?
+7. **Stage 7:** People are complaining that they reach the $ limit too fast and we are spending way too much on this... Couldn't we just host a few models ourselves using open-source models and "only pay for the infra"?
 
 Stage 7 might have to wait a bit for a few companies -- but I have a really strong hunch that this is going to be the case for most, and we want to be ready. This series is intended to cover my understanding of the current landscape and to solidify some of what I've learned. The thing that's hard about this in general is the fact that as platform engineers, we have to understand **so much stuff**, and now there's a whole new area we need to dig into. Remember how long it took us to be comfortable with K8s? Now, your `HTTPRoute` setup for your Gateway API implementation is useless. Your `HPA` scaling based on memory/CPU utilization can be thrown out of the window. You'll come across new K8s terminology like `LeaderWorkerSet` and `DisaggregatedSet`. Traditional service meshes won't help you, and you'll come across a ton of new metrics (related to GPU) that will be the heart of operating LLMs. TL,DR: a fun journey lies ahead!
 
@@ -48,7 +48,7 @@ So let's roll.
 
 ## Why are GPUs all the rage now?
 
-As far as raw resources are concerned, we've only had to deal with disk, CPU, and memory. Disk space has not been an issue for a long time because SSDs and HDDs have become dirt cheap (_unless we are talking about huge scale_). Memory and CPU, on the other hand, have always been considered precious resources because VMs are expensive, so our focus has been on these two -- however, all you keep hearing about is how expensive GPUs are because of AI, models run on GPUs, you need to take a loan to buy a damn RTX 5070 to be able to play games on high res, and so on.
+As far as raw resources are concerned, we've only had to deal with disk, CPU, and memory. Disk space has not been an issue for a long time because SSDs and HDDs have become dirt cheap (_unless we are talking about huge scale_). Memory and CPU, on the other hand, have always been considered precious resources because VMs are expensive, so our focus has been on these two -- however, all you keep hearing about is how expensive GPUs are because of AI, how models run on GPUs, how you need to take out a loan to buy a damn RTX 5070 to be able to play games at high res, and so on.
 We know that for the workloads we are used to, computation happens on the CPU -- so why on earth can't we keep using it for LLM workloads? Those require computation, just like the server running my awesome backend rewritten in Rust, right? Well, no.
 
 ### Cores and memory bandwidth
@@ -75,7 +75,7 @@ It is also worth mentioning that there are models that can be run on CPUs (for e
 
 ### Takeaway
 
-GPUs are much more suited architecturally on the hardware level for the matrix operations that are needed for LLMs to calculate, so you'll be using them. To determine what kind of a GPU you need, you'll look at its compute, capacity, and bandwidth numbers -- depending on your use case.
+GPUs are much better suited at the hardware level to the matrix operations that LLMs need to perform, so you'll be using them. To determine what kind of a GPU you need, you'll look at its compute, capacity, and bandwidth numbers -- depending on your use case.
 
 ## The model
 
@@ -102,7 +102,7 @@ To see inside the **model**, let's install the _safetensors_ Python module and t
 pip install safetensors torch
 ```
 
-and then execute the below Python code to print the tensors from the model:
+and then execute the Python code below to print the tensors from the model:
 
 ```python
 from safetensors import safe_open
@@ -136,7 +136,7 @@ tensor([[-0.0894,  0.1367, -0.1045,  ...,  0.4727,  0.4492,  0.1924],
 
 If you expected to see a lot of interesting stuff inside the model code, now you must be disappointed -- **it's just a bunch of numbers**! These are the numbers that are learned via [model training](https://www.ibm.com/think/topics/llm-training) that define how a certain input will produce the required output. One thing to note is that each **layer** performs a lot of calculations, and then passes the result of the calculation to the next layer.
 
-![Overly-simplified way of looking at models](/blog/images/llm-platform-engineering-overview/simplified-overview-model.png)
+![Overly simplified way of looking at models](/blog/images/llm-platform-engineering-overview/simplified-overview-model.png)
 
 ### Takeaway
 
@@ -170,7 +170,7 @@ black box of magic and lots of maths
 generated output (The weather is sunny in Hungary, yo!)
 ```
 
-The whole process of running the trained model to produce an output is called **inference**. We will dive deeper into the important parts, but one of the points I'd like to get across before diving deeper is that LLMs are nothing more than **token predictor machines**. You give it a prompt, the prompt goes through the black box of magic calculations, and it gives you an answer based on a LOT of maths and learned weights.
+The whole process of running the trained model to produce an output is called **inference**. We will dive deeper into the important parts, but one of the points I'd like to get across before diving deeper is that LLMs are nothing more than **token predictor machines**. You give an LLM a prompt, the prompt goes through the black box of magic calculations, and it gives you an answer based on a LOT of maths and learned weights.
 
 #### Takeaway
 
@@ -227,7 +227,7 @@ you -> 498
 #### From token IDs to embedding vectors
 
 Great, but what now, you might ask. Well, the model cannot really do anything with the above integer numbers -- remember how everything in a model is represented as matrices (**n-dimensional matrices, aka tensors**). So now comes the **Embedding** part.
-The models all have a big **table** where each ID is mapped to an **embedding vector**. For example, if the model uses embeddings with 4 dimensions (_the number of dimensions for these embeddings is different for models, e.g. for Qwen2.5-0.5B the hidden dimension is 896, so these tokens are represented by 896-dimensional tensors, not just 4 like in the below example_):
+The models all have a big **table** where each ID is mapped to an **embedding vector**. For example, if the model uses embeddings with 4 dimensions (_the number of dimensions for these embeddings differs between models, e.g. for Qwen2.5-0.5B the hidden dimension is 896, so these tokens are represented by 896-dimensional tensors, not just 4 like in the example below_):
 
 ```text
 9707 → [ 0.8, -0.2,  0.4,  0.1 ]  # hello's embedding vector
@@ -277,7 +277,7 @@ and this one:
 We sat down next to the river bank.
 ```
 
-the token `bank` will go through the **tokenizer** and produce the same integer **ID**, and thus it will have the same **embedding vector** representations -- but the meaning of the word `bank` is completely different based on which sentence we use it in -- so LLMs need a mechanism to know the **meaning** of the word based on the **context**. This mechanism is called **attention**.
+the token `bank` will go through the **tokenizer** and produce the same integer **ID**, and thus it will have the same **embedding vector** -- but the meaning of the word `bank` is completely different based on which sentence we use it in -- so LLMs need a mechanism to know the **meaning** of the word based on the **context**. This mechanism is called **attention**.
 
 At a high level, attention lets **each token** look at the **other tokens** in our prompts and decide how relevant they are when building its next representation. Let's use our bank example again (_this article is quickly becoming an OTP ad. Unfortunately, I'm not sponsored by them..._):
 
@@ -309,7 +309,7 @@ In the decoder-only LLMs we care about here, **each token can attend to itself a
 Take me to the nearest OTP bank.
 ```
 
-the token `nearest` only has attention scores for the token representations of `["Take", "me", "to", "the", "nearest"]` but not `bank` and `.`. This is called _causal self-attention_. There are many other types of attention mechanisms. If you are interested, read it here: [link](https://www.turingpost.com/p/attention-types).
+the token `nearest` only has attention scores for the token representations of `["Take", "me", "to", "the", "nearest"]` but not `bank` and `.`. This is called _causal self-attention_. There are many other types of attention mechanisms. If you are interested, read about them here: [link](https://www.turingpost.com/p/attention-types).
 
 #### Attention heads
 
@@ -325,7 +325,7 @@ me -> for 1 attention head this has a high attention score because it will answe
 to
 the
 nearest -> for 1 attention head this can have the highest attention score, because the output of the LLM might include the address for the bank
-OTP -> for another attention head, this can have the highest attention score because it specifices exactly what bank we are searching for
+OTP -> for another attention head, this can have the highest attention score because it specifies exactly what bank we are searching for
 bank -> for yet another attention head this has the highest attention score, as the entity we are searching for is a bank.
 ```
 
@@ -333,7 +333,7 @@ Each attention head calculates its own attention scores, then uses those scores 
 
 ![Attention heads](/blog/images/llm-platform-engineering-overview/attention-heads.png)
 
-Obviously, not only the token `bank` has attention scores tho -- **every token performs attention**, and thus every token has attention scores. The question is: how does the model actually decide which tokens are **relevant** to other tokens? How does it know that `OTP` and `river` are the most relevant tokens in our prompts to the token `bank`? How does it calculate **the attention scores**?
+Obviously, the token `bank` isn't the only one with attention scores tho -- **every token performs attention**, and thus every token has attention scores. The question is: how does the model actually decide which tokens are **relevant** to other tokens? How does it know that `OTP` and `river` are the most relevant tokens in our prompts to the token `bank`? How does it calculate **the attention scores**?
 
 This is where `Query (Q)`, `Key (K)`, and `Value (V)` come into the picture, which we will discuss on a high level in the next section.
 
@@ -392,7 +392,7 @@ to calculate `K`, `Q`, `V`, and `O` during **inference**.
 
 ![K,Q,V layers](/blog/images/llm-platform-engineering-overview/q-k-v-layers.png)
 
-So what are `K`, `Q`, `V`, and `O` then? A way of thinking about them is that they are just other **vectors that carry the below information about each token**:
+So what are `K`, `Q`, `V`, and `O` then? A way of thinking about them is that they are just other **vectors that carry the following information about each token**:
 
 ```text
 Query = What information am I looking for in other tokens?
@@ -401,7 +401,7 @@ Value = What information do I contribute to the context of another token if that
 Output = Combined output of the above
 ```
 
-The `Query` and `Key` are used to calculate how relevant two tokens are to each other (e.g. how relevant `OTP` is for the token `bank`), the `Value` contains the information that actually gets passed forward once that **relevance has been calculated**. `Q`, `K`, and `V` are projections of the token's current representation. `O` is produced after attention has mixed information from the relevant `V` vectors, and `o_proj` transforms that combined result back into the model's representation space.
+The `Query` and `Key` are used to calculate how relevant two tokens are to each other (e.g. how relevant `OTP` is for the token `bank`). The `Value` contains the information that actually gets passed forward once that **relevance has been calculated**. `Q`, `K`, and `V` are projections of the token's current representation. `O` is produced after attention has mixed information from the relevant `V` vectors, and `o_proj` transforms that combined result back into the model's representation space.
 
 #### Creating Q, K, and V for our bank example
 
@@ -574,13 +574,15 @@ There’s also an important **performance consequence** hiding in all of this. W
 
 #### Takeaway
 
-`Q`, `K`, `V`, and `O` are vector representations calculated for **every token** in **every attention layer** during inference using **weights** that are part of the model and were learned during training. `Q` and `K` are used to figure out which tokens are relevant to each other, `V` carries the information that gets mixed together based on that relevance, and `O` is the transformed result of the attention calculation. These calculations happen over and over again across tokens and layers, which makes them both **compute- and memory-heavy**. Token `n+1` usually needs to have access to the `Q`, `K`, `V`, and `O`s of every other token that comes before it (`0..n+1)` and itself, so a bigger context window means more work.
+`Q`, `K`, `V`, and `O` are vector representations calculated for **every token** in **every attention layer** during inference using **weights** that are part of the model and were learned during training. `Q` and `K` are used to figure out which tokens are relevant to each other, `V` carries the information that gets mixed together based on that relevance, and `O` is the transformed result of the attention calculation. These calculations happen over and over again across tokens and layers, which makes them both **compute- and memory-heavy**. Token `n+1` usually needs to have access to the `K`s and `V`s of every other token that comes before it (`0..n+1)` and its own `K`, `V`, `Q` and `O`, so a bigger context window means more work.
 
 ### Prefill
 
-**Prefill** is the first big phase of the inference workflow. **It lasts from submitting our prompt up until the first token is returned to us in the LLM's answer**.
+**Prefill** is the first big model-execution phase of the inference workflow. **It processes the input context and produces the first output token of the LLM's answer**.
 
-In practical terms, when we prompt any LLM, there is a slight **pause** before it starts streaming the answer back -- that **pause** + getting the first token back in the LLM's answer is the prefill phase. You might also notice that the **bigger your prompt, the longer the pause** -- which now should **NOT** surprise you because you know about tokenization, embedding, attention (token `n+1` needs all the stuff from tokens `0..n`), `Q`s, `K`s, `V`s, how each token needs a ton of maths (_billions or trillions of operations_) and more.
+In practical terms, prefill does much of the heavy lifting during that **pause** before the answer starts streaming. The entire wait is called **Time To First Token (TTFT)**, which also includes things like queueing and network latency. More on that below.
+
+You might also notice that the **bigger your prompt, the longer the pause** -- which now should **NOT** surprise you because you know about tokenization, embedding, attention (token `n+1` needs all the stuff from tokens `0..n`), `Q`s, `K`s, `V`s, how each token needs a ton of maths (_billions or trillions of operations_) and more.
 
 #### Parallel processing
 
@@ -596,7 +598,7 @@ On a super high level, during prefill the **model** gets loaded out of the `VRAM
 
 We can see that prefill moves a huge amount of data from the GPU's `HBM` (High Bandwidth Memory), but it gets much more computation out of every byte it moves. This high arithmetic intensity is why prefill tends to be **limited by compute** (_TFLOPS of your GPU_) rather than **memory bandwidth**.
 
-The most precise phrasing would be to say that the calculations are firing for the whole **input context**, not just your input tokens. If a chatbot LLM has something in its context by default (`You are a helpful chat assistant. Here's a thousand page summary of our products' FAQ: [...]`) then it also gets processed alongside our prompt `How can I refund this garbage lawnmower?` in an unoptimized system (in a real production system the system prompt is cached, but more on this later).
+The most precise phrasing would be to say that the calculations are firing for the whole **input context**, not just your input tokens. If a chatbot LLM has something in its context by default (`You are a helpful chat assistant. Here's a thousand-page summary of our products' FAQ: [...]`) then it also gets processed alongside our prompt `How can I refund this garbage lawnmower?` in an unoptimized system (in a real production system the system prompt is cached, but more on this later).
 
 You might also ask the question: **why does this phase only compute the first output token in the LLM's answer**?
 
@@ -640,7 +642,7 @@ This also brings up an interesting point about **GPU resource usage** and what t
 - capacity
 - memory bandwidth
 
-The model-weight capacity requirement is basically the same for prefill and decode: the model still has to fit into GPU memory (_but total memory usage isn't necessarily the same, because there are other things occupying VRAM as well, but we'll get to this in the next section_)
+The model-weight capacity requirement is basically the same for prefill and decode: the model still has to fit into GPU memory (_but total memory usage isn't necessarily the same, because there are other things occupying VRAM as well, but we'll get to this in the next section_).
 
 During **prefill** we have many input tokens to process at the same time. As the GPU reads model weights from HBM, those weights can be reused to perform calculations across many input token positions in parallel. In other words, we get a LOT of maths done for every byte of model data we move from HBM to the arithmetic units. This gives prefill relatively **high arithmetic intensity**, which means that for sufficiently large prompts **compute is generally the bottleneck**.
 
@@ -652,7 +654,7 @@ For **decode**, however, the resource constraints change quite a bit. To be abso
 
 We've had an important metric for prefill called `TTFT` (Time To First Token). We also have a really important one for decode called `TPOT` (_Time Per Output Token_). `TPOT` measures approximately how long the model takes to generate each additional output token during the decode phase. E.g. if `TPOT` is measured to be `50 ms/token`, it means that it produces `20 tokens per second`.
 
-This is quite an important metric of decode, because it has really strong UX implications. If your users have to wait an eternity for the answer to come up, they'll be mad. A slow `TTFT` feels like the LLM froze trying to process our request, a slow `TPOT` feels like the LLM is really struggling to come up with the answer. Both of these are terrible.
+This is quite an important metric of decode, because it has really strong UX implications. If your users have to wait an eternity for the answer to come up, they'll be mad. A slow `TTFT` feels like the LLM froze trying to process our request. A slow `TPOT` feels like the LLM is really struggling to come up with the answer. Both of these are terrible.
 
 #### Wasted work?
 
@@ -669,11 +671,11 @@ Where we store these will be revealed in the next section.
 
 #### Takeaway
 
-Decode is the phase where each output token in our LLM's answer gets generated sequentially. Prefill gets lots of computation out of each chunk of data moved from HBM to the compute units, decode gets relatively little computation out of each chunk of data moved and needs to move much more frequently. Hence prefill is compute-bound, while decode is memory-bandwidth-bound. `TPOT` is an important metric describing the performance of decode.
+Decode is the phase where each output token in our LLM's answer gets generated sequentially. Prefill gets lots of computation out of each chunk of data moved from HBM to the compute units. Decode gets relatively little computation out of each chunk of data moved and needs to move data much more frequently. Hence prefill is compute-bound, while decode is memory-bandwidth-bound. `TPOT` is an important metric describing the performance of decode.
 
 ### KV Cache
 
-Finally the section that answers two of the questions left hanging from both **prefill** and **decode**:
+Finally we reach the section that answers two of the questions left hanging from both **prefill** and **decode**:
 
 - why is prefill called **prefill**? What does it prefill?
 - where do we **store the already calculated stuff** so that autoregressive token generation during decode only needs to calculate new stuff?
@@ -693,7 +695,7 @@ Value = What information do I contribute to the context of another token if that
 Output = Combined output of the above
 ```
 
-According to these (_and what we've learned in that section hopefully_) definitions, we can see that once the next token goes through processing there are two of the above vectors that will remain unchanged after the calculations, no matter the token we are processing them for: `K` and `V` because they describe what a token **contains** irrespective of what another token is looking for.
+According to these definitions (_and hopefully what we've learned in that section_), we can see that once the next token goes through processing there are two of the above vectors that will remain unchanged after the calculations, no matter the token we are processing them for: `K` and `V` because they describe what a token **contains** irrespective of what another token is looking for.
 
 Back to the bank example :) let's say we've already processed:
 
@@ -741,8 +743,8 @@ V_dot
 
 to actually retrieve the **information contributed by those tokens**.
 
-To be fair the previous tokens' `Q`s and `O`s haven't changed either, the difference is that we just don't care about them anymore.
-E.g `Q_OTP` represented what `OTP` was looking for when it was being processed, but it was processed already so we don't need it anymore. When we process `Sure` we need a brand-new `Q_sure` instead. The previous `O`s have also already served their purpose while those tokens were being processed through the model, future attention operations don't need them.
+To be fair the previous tokens' `Q`s and `O`s haven't changed either. The difference is that we just don't care about them anymore.
+E.g. `Q_OTP` represented what `OTP` was looking for when it was being processed, but it was processed already so we don't need it anymore. When we process `Sure` we need a brand-new `Q_sure` instead. The previous `O`s have also already served their purpose while those tokens were being processed through the model. Future attention operations don't need them.
 
 The important part is that:
 
@@ -750,14 +752,14 @@ The important part is that:
 
 **Adding `Sure` to the end of the sequence does not suddenly change what information the previous token `OTP` contains or how future tokens should match against it**. Its `K` and `V` were calculated when `OTP` was originally processed and because of **causal attention** they remain valid for every token that comes after it.
 
-For these reasons (_and more_) **prefill** _prefills_ the cache with `K`s and `V`s of all the tokens it has processed so that when another token goes through the model, they won't have to do these calculations over and over again in vein (of course, the new token's `K`s and `V`s are also added to the cache once the model has calculated them during decode, and so on).
+For these reasons (_and more_) **prefill** _prefills_ the cache with `K`s and `V`s of all the tokens it has processed so that when another token goes through the model, we won't have to do these calculations over and over again in vain (of course, the new token's `K`s and `V`s are also added to the cache once the model has calculated them during decode, and so on).
 
 So we are basically here in the process:
 ![Prefill KV-cache](/blog/images/llm-platform-engineering-overview/prefill-kv-cache.png)
 
 ### Decode and KV Cache
 
-In the **decode** section we said that all work that prefill has done for calculating the tokens is not wasted, which we have proven above. We have also said that during decode the model does **autoregressive generation** meaning the process of coming up with the output tokens is mostly sequential (_there are some [optimizations and techniques](https://developer.nvidia.com/blog/an-introduction-to-speculative-decoding-for-reducing-latency-in-ai-inference/) to get around this, but we'll talk about this in a much later article_) because token `n+1` needs the info from token `0..n`.
+In the **decode** section we said that all the work that prefill has done to process the tokens is not wasted, which we have proven above. We have also said that during decode the model does **autoregressive generation** meaning the process of coming up with the output tokens is mostly sequential (_there are some [optimizations and techniques](https://developer.nvidia.com/blog/an-introduction-to-speculative-decoding-for-reducing-latency-in-ai-inference/) to get around this, but we'll talk about this in a much later article_) because token `n+1` needs the info from tokens `0..n`.
 
 During decode every newly generated token gets processed through the model but instead of recalculating the `K`s and `V`s for the entire context again, **the attention layers simply reach into the KV Cache and reuse the ones we've already calculated**.
 
@@ -807,7 +809,7 @@ K_bank
 K_dot
 ```
 
-and all their corresponding `V`s, **it simply retrieves them from the `KV Cache` so that `Q_sure` can then attend against all of those cached `K`s and use their corresponding cached `V`s**! Awesome.
+and all their corresponding `V`s, **it simply retrieves them from the `KV Cache` so that `Q_sure` can then attend to all of those cached `K`s and use their corresponding cached `V`s**! Awesome.
 
 The model continues processing `Sure` through the rest of its layers and eventually produces the next token:
 
@@ -839,7 +841,7 @@ K_thing
 V_thing
 ```
 
-and `Q_thing` can now attend against the cached Ks and Vs of:
+and `Q_thing` can now attend to the cached Ks and Vs of:
 
 ```text
 Take
@@ -853,7 +855,7 @@ bank
 Sure
 ```
 
-and then add its own `K`s and `V`s, and so on until the whole decode process is finished and the answer is given by the LLM!
+The model then adds `thing`'s own `K`s and `V`s, and so on until the whole decode process is finished and the answer is given by the LLM!
 
 ![Decode KV-cache](/blog/images/llm-platform-engineering-overview/decode-kv-cache.png)
 
@@ -865,7 +867,7 @@ The cache lives in the `VRAM` of our **GPU**, alongside the **model**. The reaso
 
 ![KV Cache VRAM](/blog/images/llm-platform-engineering-overview/KV-Cache-VRAM.png)
 
-Engineering is all about **tradeoffs** (_remember all that intense system design interview prep you were doing for your current company, where you had to showcase how senior you are by how many times you said "it depends", "trade off", "sharding", and "eventual consistency"?_), and now we have managed to **trade a compute problem for a VRAM capacity problem**. If we didn't have the **KV Cache** we would have to calculate all the values for all the tokens every time making the cores work really hard but with the cache we reduce repeated computation at the cost of consuming more memory in the long run.
+Engineering is all about **tradeoffs** (_remember all that intense system design interview prep you were doing for your current company, where you had to showcase how senior you are by how many times you said "it depends", "tradeoff", "sharding", and "eventual consistency"?_), and now we have managed to **trade a compute problem for a VRAM capacity problem**. If we didn't have the **KV Cache** we would have to calculate all the values for all the tokens every time. That would make the cores work really hard. With the cache we reduce repeated computation at the cost of consuming more memory in the long run.
 
 In the previous parts we have learnt that prefill adds a bunch of stuff into the cache, and decode reads from the cache and also adds stuff for each token it processes. Roughly we could say:
 
@@ -902,7 +904,7 @@ KV cache per token ≈
 × 2 bytes          # BF16 -- we store the values in 2 bytes (precision related stuff, will talk about it in a future article)
 ```
 
-which roughly equals 327680 bytes aka. **320 KiB per token** which is insanely big! If we have a prompt + answer that equals 100.000 tokens, this becomes more than `30 GiB` from our precious `VRAM` **just for 1 request + reply for 1 user**. This fact alone brings a lot of cool engineering problems with it.
+which roughly equals 327680 bytes aka. **320 KiB per token** which is insanely big! If we have a prompt + answer that equals 100.000 tokens, this becomes more than `30 GiB` of our precious `VRAM` **just for 1 request + reply for 1 user**. This fact alone brings a lot of cool engineering problems with it.
 
 The above was just for 1 request from the user and 1 response from the LLM (so one **turn**). We obviously want to **preserve and reuse the KV state for the tokens that remain in the model's context across multiple turns**. We cannot just fill up the cache with `K`s and `V`s of just one turn and throw it away, because it would mean having to run prefill against ALL the input tokens to start generating the answer of the second turn, and so on.
 
@@ -919,14 +921,14 @@ So the solution is to **keep filling the** `KV Cache` with every `K` and `V` of 
 
 so the cache keeps growing with the conversation.
 
-This should also bring up a LOT of questions in you, such as:
+This should also raise a LOT of questions for you, such as:
 
 - what should be the max size of a `KV Cache` for a user?
 - do we reserve the same cache size for every user?
-- when should we stop admitting in requests?
+- when should we stop admitting requests?
 - how much `VRAM` capacity do we need for the caches? How much GPU should we pay for?
 - when do we evict the `KV Cache` of a user? How long do we let it grow? (_ahhh... cache invalidation strikes again!_)
-- can we reuse reserved but unitilized blocks in `VRAM` for another user's `KV Cache`?
+- can we reuse reserved but unused blocks in `VRAM` for another user's `KV Cache`?
 - can we store the KV Cache more efficiently? Can we store it across multiple GPUs?
 
 But wait, who wants to run inference for only 1 user? We want to be able to serve an LLM for **multiple users at the same time concurrently** which magnifies these problems even more, and brings even MORE juicy questions with it. We will touch on these in later articles, don't worry.
@@ -936,6 +938,6 @@ This means GPU capacity isn't only about whether the model fits, but it also det
 
 ### Conclusion
 
-If you've come this far dear reader, you are my personal hero. This was quite a long one, and we haven't even done anything fun or practical. However, we have hopefully gone from looking at LLMs as these magic things knowing everything somehow, to now understanding that everything is just..... maths. _Sigh_.
+If you've come this far dear reader, you are my personal hero. This was quite a long one, and we haven't even done anything fun or practical. However, we have hopefully gone from looking at LLMs as these magic things that somehow know everything, to now understanding that everything is just..... maths. _Sigh_.
 
-Now that we understand the most important parts of the inference workflow on a high level, we can start looking at more practical examples, and build our understanding further. In the next article we will serve our first model, talk about what the heck `vLLM` is and more. LFG!
+Now that we understand the most important parts of the inference workflow at a high level, we can start looking at more practical examples, and build our understanding further. In the next article we will serve our first model and talk about what the heck `vLLM` is and what special things it can provide for model serving. Onwards!
