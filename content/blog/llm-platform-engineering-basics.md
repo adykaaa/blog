@@ -859,10 +859,47 @@ and then add its own `K`s and `V`s, and so on until the whole decode process is 
 
 and this is obviously true for **multiple prompts and long convos**. More on this in the next part.
 
-#### But where does the KV Cache live?
+#### KV Cache and VRAM
 
 The cache lives in the `VRAM` of our **GPU**, alongside the **model**. The reason for this is simple: accessing the cache needs to be super fast, and should not go through unnecessary networking hops... if we had to add a networking hop or two to every KV cache access, decode would be painfully slow.
 
 ![KV Cache VRAM](/blog/images/llm-platform-engineering-overview/KV-Cache-VRAM.png)
 
-Engineering is all about tradeoffs (_remember all that intense system design interview prep you were doing for your current company, where you had to showcase how senior you are by how many times you said "it depends", "trade off", "sharding", and "eventual consistency"?_), and now we have managed to **trade a compute problem for a VRAM capacity problem**. If we didn't have the **KV Cache** we would have to calculate all the values for all the tokens every time making the cores work really hard but with the cache we reduce repeated computation at the cost of consuming more memory in the long run.
+Engineering is all about **tradeoffs** (_remember all that intense system design interview prep you were doing for your current company, where you had to showcase how senior you are by how many times you said "it depends", "trade off", "sharding", and "eventual consistency"?_), and now we have managed to **trade a compute problem for a VRAM capacity problem**. If we didn't have the **KV Cache** we would have to calculate all the values for all the tokens every time making the cores work really hard but with the cache we reduce repeated computation at the cost of consuming more memory in the long run.
+
+In the previous parts we have learnt that prefill adds a bunch of stuff into the cache, and decode reads from the cache and also adds stuff for each token it processes. Roughly we could say:
+
+```text
+more tokens
+    ↓
+more K/V tensors
+    ↓
+larger KV Cache
+    ↓
+more VRAM usage
+```
+
+and the relationship is **linear with sequence length** -- so computation for 10.000 tokens requires _roughly_ twice as much space in the KV Cache as it does for 5000 tokens... but how much exactly?
+
+If we look at `LLama 3.1-70B` it has
+
+```text
+80 transformer layers
+8 KV heads
+128 dimensions per head
+BF16 = stores values in 2 bytes
+```
+
+so the equation becomes
+
+```text
+KV cache per token ≈
+
+2                  # the cache stores both K and V
+× 80               # number of layers
+× 8                # number of KV heads (part of attention head we've learnt about)
+× 128              # vector dimensions per head
+× 2 bytes          # BF16 -- we store the values in 2 bytes (precision related stuff, will talk about it in a future article)
+```
+
+which roughly equals 327680 bytes aka. **320 KiB per token** which is insanely big! If we have a prompt that is 100.000 tokens, this becomes more than `30 GiB`!!!!! `30 GiB` from our precious `VRAM` just for 1 big prompt.
