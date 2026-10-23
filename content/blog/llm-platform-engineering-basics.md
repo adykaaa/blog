@@ -746,7 +746,7 @@ E.g `Q_OTP` represented what `OTP` was looking for when it was being processed, 
 
 The important part is that:
 
-**K_take, V_take, K_me, V_me, K_OTP, V_OTP, etc. have not changed**
+`K_take`, `V_take`, `K_me`, `V_me`, `K_OTP`, `V_OTP` etc. have **not changed**.
 
 **Adding `Sure` to the end of the sequence does not suddenly change what information the previous token `OTP` contains or how future tokens should match against it**. Its `K` and `V` were calculated when `OTP` was originally processed and because of **causal attention** they remain valid for every token that comes after it.
 
