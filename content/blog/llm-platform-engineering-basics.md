@@ -930,3 +930,6 @@ This should also bring up a LOT of questions in you, such as:
 - can we store the KV Cache more efficiently? Can we store it across multiple GPUs?
 
 But wait, there's much more -- who wants to run inference for only 1 user? We want to be able to serve an LLM for **multiple users at the same time concurrently** which magnifies these problems even more, and brings even MORE juicy questions with it.
+
+**Takeaway**: The `KV Cache` lives in GPU memory and stores the `K`s and `V`s of previously processed tokens so that we don't have to recalculate them during **autoregressive generation**. Its size grows roughly linearly with the number of tokens in a sequence and every active request needs **KV-cache memory of its own**.
+This means GPU capacity isn't only about whether the model fits, but it also determines how much room remains for the `KV Caches` of active requests — and therefore has a **huge impact on how much concurrency an inference server can actually support**. The KV Cache also has to be read during decode, meaning it contributes not only to VRAM capacity usage but also to **memory-bandwidth pressure** as well.
