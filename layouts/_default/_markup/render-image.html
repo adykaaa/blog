@@ -1,0 +1,18 @@
+{{- $src := .Destination -}}
+{{- $url := urls.Parse $src -}}
+{{- if and (not $url.IsAbs) (not (strings.HasPrefix $src "/")) -}}
+  {{- $localPath := path.Join "content" .Page.File.Dir $url.Path -}}
+  {{- if strings.HasPrefix $localPath "static/" -}}
+    {{- $src = strings.TrimPrefix "static/" $localPath | relURL -}}
+    {{- with $url.RawQuery -}}
+      {{- $src = printf "%s?%s" $src . -}}
+    {{- end -}}
+    {{- with $url.Fragment -}}
+      {{- $src = printf "%s#%s" $src . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+<img src="{{ $src | safeURL }}" alt="{{ .PlainText }}"
+  {{- with .Title }} title="{{ . }}"{{ end -}}
+>
+{{- /* Remove trailing whitespace for inline images. */ -}}

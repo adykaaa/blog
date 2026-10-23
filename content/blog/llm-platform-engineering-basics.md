@@ -53,7 +53,7 @@ We know that for the workloads we are used to, computation happens on the CPU --
 
 ### Cores and memory bandwidth
 
-![CPU vs GPU architecture](/blog/images/llm-platform-engineering-overview/gpu-vs-cpu-blog.jpg)
+![CPU vs GPU architecture](../../static/images/llm-platform-engineering-overview/gpu-vs-cpu-blog.jpg)
 
 Without going into too much detail about the actual hardware architecture of CPUs and GPUs, the main thing to remember is that **CPUs** have a **few powerful cores** that are great at executing a smaller number of complex instructions (compared to the GPU) very quickly: application logic, web servers, databases, operating systems -- so operations that require a lot of branching and complexity. **GPUs**, on the other hand, have **thousands of smaller cores** that are great at executing simple arithmetic operations (a LOT of them) over and over again. Spoiler alert: LLMs require the latter.
 
@@ -93,7 +93,7 @@ LLM stands for Large Language **Model**, so it would be great to understand what
 
 Let's look at the files for the [SmolLM2 with 135 million parameters](https://huggingface.co/HuggingFaceTB/SmolLM2-135M/tree/main) model (we could look at any other model. I chose this one for an example). As we can see, there are a few configuration files, and one bigger file called **model.safetensors**:
 
-![LLM files on HuggingFace](/blog/images/llm-platform-engineering-overview/smollm2.png)
+![LLM files on HuggingFace](../../static/images/llm-platform-engineering-overview/smollm2.png)
 
 When we talk about **the model**, this is the file we are mostly referencing. _safetensors_ is a new simple format for storing tensors safely. A **tensor** essentially is a multidimensional array of numbers which are used by LLMs to store things like model weights, token embeddings, etc. for matrix operations (so many complex words to understand... but we'll get there).
 
@@ -137,7 +137,7 @@ tensor([[-0.0894,  0.1367, -0.1045,  ...,  0.4727,  0.4492,  0.1924],
 
 If you expected to see a lot of interesting stuff inside the model code, now you must be disappointed -- **it's just a bunch of numbers**! These are the numbers that are learned via [model training](https://www.ibm.com/think/topics/llm-training) that define how a certain input will produce the required output. One thing to note is that each **layer** performs a lot of calculations, and then passes the result of the calculation to the next layer.
 
-![Overly simplified way of looking at models](/blog/images/llm-platform-engineering-overview/simplified-overview-model.png)
+![Overly simplified way of looking at models](../../static/images/llm-platform-engineering-overview/simplified-overview-model.png)
 
 ### Takeaway
 
@@ -147,7 +147,7 @@ A model is nothing but a **file** which contains a bunch of numbers in N-dimensi
 
 Now that we know why GPUs are used to run LLMs and we know that a model is nothing but a bunch of learned numbers, it's time to look at the high-level flow of how an LLM works and focus in on the important parts that we'll care about later.
 
-![LLM high level architecture](/blog/images/llm-platform-engineering-overview/llm-overview.png)
+![LLM high level architecture](../../static/images/llm-platform-engineering-overview/llm-overview.png)
 
 Once we get through this looooong article, you'll be able to reason about all parts (and more!) of the above picture, I hope.
 
@@ -239,7 +239,7 @@ The models all have a big **table** where each ID is mapped to an **embedding ve
 
 This **embedding table is part of the model's learned weights**, so it is just another tensor inside the `model.safetensors` file we looked at earlier. Its shape is `[vocabulary size, embedding dimension]`: one row for each token ID, with each row containing that token's vector. Training learns these numbers. During **inference** the embedding layer just looks up the rows for our input tokens to get their vector representations.
 
-![Tokenization and Embedding](/blog/images/llm-platform-engineering-overview/tokenization-embedding.png)
+![Tokenization and Embedding](../../static/images/llm-platform-engineering-overview/tokenization-embedding.png)
 
 FTR, the embedding table takes up some memory as well. [Qwen2.5-0.5B's configuration](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct/blob/main/config.json) specifies **151,936** vocabulary entries and **896** dimensions. That's `151,936 × 896 = 136,134,656` parameters -- roughly **260 MiB at two bytes per parameter**, just for the input embedding table!
 
@@ -290,13 +290,13 @@ When the model is processing `bank`, not every previous token is equally useful.
 
 The model assigns a **score** to every token:
 
-![OTP bank attention example](/blog/images/llm-platform-engineering-overview/otp-bank-att-scores.png)
+![OTP bank attention example](../../static/images/llm-platform-engineering-overview/otp-bank-att-scores.png)
 
 These numbers are called **attention scores** and describe how much **attention** the token `bank` should pay to the **other tokens** to be able to correctly figure out the meaning of the word `bank` in the current context. In the example picture above, we can see that the model decided to give the highest attention score to OTP for the word `bank`.
 
 Comparing this with the `We sat down next to the river bank` prompt, it would be something along the lines of:
 
-![River bank attention example](/blog/images/llm-platform-engineering-overview/river-bank-att-scores.png)
+![River bank attention example](../../static/images/llm-platform-engineering-overview/river-bank-att-scores.png)
 
 The embedding lookup for `bank` starts from the same place and gets the same embedding vector as it did for the OTP bank example, but now tokens like `river` become much more relevant as their attention scores are the highest. Through **attention**, the model can build a completely different context-dependent representation of the same token.
 
@@ -332,7 +332,7 @@ bank -> for yet another attention head this has the highest attention score, as 
 
 Each attention head calculates its own attention scores, then uses those scores to combine the `Value` vectors (which we will learn about later) into an attention output. After all, more eyes see more!
 
-![Attention heads](/blog/images/llm-platform-engineering-overview/attention-heads.png)
+![Attention heads](../../static/images/llm-platform-engineering-overview/attention-heads.png)
 
 Obviously, the token `bank` isn't the only one with attention scores tho -- **every token performs attention**, and thus every token has attention scores. The question is: how does the model actually decide which tokens are **relevant** to other tokens? How does it know that `OTP` and `river` are the most relevant tokens in our prompts to the token `bank`? How does it calculate **the attention scores**?
 
@@ -374,7 +374,7 @@ From the first line, we can understand a few things already:
 
 If we take a look at the inside of the `model.safetensors` file again, we can see that in the `layers` there are `k`, `q`, `v`, and `o` projection weights:
 
-![K,Q,V,O proj. weights](/blog/images/llm-platform-engineering-overview/koqv-proj.png)
+![K,Q,V,O proj. weights](../../static/images/llm-platform-engineering-overview/koqv-proj.png)
 
 but what the heck are these?
 
@@ -391,7 +391,7 @@ o_proj.weight = learned numbers used to transform the attention result
 
 to calculate `K`, `Q`, `V`, and `O` during **inference**.
 
-![K,Q,V layers](/blog/images/llm-platform-engineering-overview/q-k-v-layers.png)
+![K,Q,V layers](../../static/images/llm-platform-engineering-overview/q-k-v-layers.png)
 
 So what are `K`, `Q`, `V`, and `O` then? A way of thinking about them is that they are just other **vectors that carry the following information about each token**:
 
@@ -557,7 +557,7 @@ the model essentially takes our beautiful attention percentages it has calculate
 which will produce a single value (vector): `[0.72, 0.60]` which is called the **attention output for the token `bank`** for **one** attention head. Then the model takes **all** of these attention **outputs** from **all the attention heads** from within a layer and uses the `o_proj.weight` to do some math on them which then produces `O` aka. the `Output` of the **attention part of the layer**. This `O` is not the final output of a layer, and deffo not the final output that will come up on your screen though.
 
 Here's a **diagram** I generated with ChatGPT about the above to get the flow across:
-![K,Q,V layers](/blog/images/llm-platform-engineering-overview/attention-flow-bank.png)
+![K,Q,V layers](../../static/images/llm-platform-engineering-overview/attention-flow-bank.png)
 
 To produce the LLM's final answer, however (_"Sure thing boss..."_), it goes through **more maths**: the `Output` is transformed as part of something called the **LM Head** and produces **logits** (_the model’s raw unnormalized scores for each possible next token before they’re converted into probabilities_), and then, based on how the model is configured to select from the tokens (there are multiple possible token selection strategies and algorithms), it will start displaying the output. This is maths that we don't need to really care about, and we can look at it as a black box. If you are interested:
 
@@ -590,12 +590,12 @@ You might also notice that the **bigger your prompt, the longer the pause** -- w
 All tokens already exist when the request arrives at the model (because your whole prompt is submitted). **Causal attention** still means each position can only see itself and earlier positions, but since all tokens are present, the **GPU can start processing our prompt in parallel!** (instead of _autoregressively_, which we will come back to in the next section).
 In every attention layer, `Q`, `K`, and `V` are calculated **for all tokens at the same time**, every token’s `Q` is compared against the `K`s of the tokens it is allowed to see, `V`s get mixed, `o_proj` does its thing, and the result moves on to the next layer:
 
-![Parallel prefill](/blog/images/llm-platform-engineering-overview/prefill-parallel.png)
+![Parallel prefill](../../static/images/llm-platform-engineering-overview/prefill-parallel.png)
 
 This parallel processing is really **important**. Back in our **GPU section** I said that there's a part of inference which is really **compute heavy** -- well guess what, it's **prefill**.
 On a super high level, during prefill the **model** gets loaded out of the `VRAM` (in batches) **once** into the arithmetic units and caches, and then **thousands of GPU cores** (in them hundreds of _tensor_ cores we've touched on) start firing **at the same time** for all of our input tokens to do the calculations required to produce the first token:
 
-![Model load once](/blog/images/llm-platform-engineering-overview/gpu-arith.png)
+![Model load once](../../static/images/llm-platform-engineering-overview/gpu-arith.png)
 
 We can see that prefill moves a huge amount of data from the GPU's `HBM` (High Bandwidth Memory), but it gets much more computation out of every byte it moves. This high arithmetic intensity is why prefill tends to be **limited by compute** (_TFLOPS of your GPU_) rather than **memory bandwidth**.
 
@@ -635,7 +635,7 @@ Prefill is the first big model-execution phase of inference. It processes the (_
 
 Decode is the second and final big phase of the inference workflow where the output tokens are generated (aka. the LLM answers your prompt). From the **prefill** section we've already touched on the fact that the **decode phase is sequential** by nature, meaning the LLM's answer is generated one token at a time -- the reason for this is (as we've mentioned a thousand times already) that token `n+1` needs to have the information of all tokens before it (`(0..n)`). The way you'll hear this phrased is **autoregressive token generation**:
 
-![Decode gif](/blog/images/llm-platform-engineering-overview/decode-gif.gif)
+![Decode gif](../../static/images/llm-platform-engineering-overview/decode-gif.gif)
 
 This also brings up an interesting point about **GPU resource usage** and what the **bottlenecks** are. Remember that in our GPU section we said that the GPU numbers we generally care about are:
 
@@ -649,7 +649,7 @@ During **prefill** we have many input tokens to process at the same time. As the
 
 For **decode**, however, the resource constraints change quite a bit. To be absolutely clear, decode uses the exact same things in the model as prefill for coming up with the next token: it uses the same GPU cores for compute, the same model weights, calculates attention, `Q`, `K`, `V`, `O`, uses the `LM head`, produces `logits`, chooses the output token based on the selection algorithm, etc. etc., **but instead of doing it for multiple tokens, it does it for only one at a time** (_the next streamed output token as the result of autoregressive generation_). This means that for each produced output token, the GPU has to load the model, do a bit of maths, produce the output token, and then repeat -- resulting in **high memory bandwidth usage** but underutilizing **compute** resources compared to prefill.
 
-![Decode vs Prefill GPU resources](/blog/images/llm-platform-engineering-overview/prefill-vs-decode-gpu-resources.png)
+![Decode vs Prefill GPU resources](../../static/images/llm-platform-engineering-overview/prefill-vs-decode-gpu-resources.png)
 
 #### TPOT
 
@@ -756,7 +756,7 @@ The important part is that:
 For these reasons (_and more_) **prefill** _prefills_ the cache with `K`s and `V`s of all the tokens it has processed so that when another token goes through the model, we won't have to do these calculations over and over again in vain (of course, the new token's `K`s and `V`s are also added to the cache once the model has calculated them during decode, and so on).
 
 So we are basically here in the process:
-![Prefill KV-cache](/blog/images/llm-platform-engineering-overview/prefill-kv-cache.png)
+![Prefill KV-cache](../../static/images/llm-platform-engineering-overview/prefill-kv-cache.png)
 
 ### Decode and KV Cache
 
@@ -858,7 +858,7 @@ Sure
 
 The model then adds `thing`'s own `K`s and `V`s, and so on until the whole decode process is finished and the answer is given by the LLM!
 
-![Decode KV-cache](/blog/images/llm-platform-engineering-overview/decode-kv-cache.png)
+![Decode KV-cache](../../static/images/llm-platform-engineering-overview/decode-kv-cache.png)
 
 and this is obviously true for **multiple prompts and long convos**. More on this in the next part.
 
@@ -866,7 +866,7 @@ and this is obviously true for **multiple prompts and long convos**. More on thi
 
 The cache lives in the `VRAM` of our **GPU**, alongside the **model**. The reason for this is simple: accessing the cache needs to be super fast, and should not go through unnecessary networking hops... if we had to add a networking hop or two to every KV cache access, decode would be painfully slow.
 
-![KV Cache VRAM](/blog/images/llm-platform-engineering-overview/KV-Cache-VRAM.png)
+![KV Cache VRAM](../../static/images/llm-platform-engineering-overview/KV-Cache-VRAM.png)
 
 Engineering is all about **tradeoffs** (_remember all that intense system design interview prep you were doing for your current company, where you had to showcase how senior you are by how many times you said "it depends", "tradeoff", "sharding", and "eventual consistency"?_), and now we have managed to **trade a compute problem for a VRAM capacity problem**. If we didn't have the **KV Cache** we would have to calculate all the values for all the tokens every time. That would make the cores work really hard. With the cache we reduce repeated computation at the cost of consuming more memory in the long run.
 
@@ -918,7 +918,7 @@ request 3 -> response 3 (but LLM needs context of request 1+2 AND the response 1
 ```
 
 So the solution is to **keep filling the** `KV Cache` with every `K` and `V` of every request and response:
-![Growing Cache](/blog/images/llm-platform-engineering-overview/growing-cache-for-turns.png)
+![Growing Cache](../../static/images/llm-platform-engineering-overview/growing-cache-for-turns.png)
 
 so the cache keeps growing with the conversation.
 
@@ -939,7 +939,7 @@ This means GPU capacity isn't only about whether the model fits, but it also det
 
 ### Conclusion
 
-![Frodo](/blog/images/llm-platform-engineering-overview/frodo.jpg)
+![Frodo](../../static/images/llm-platform-engineering-overview/frodo.jpg)
 
 If you've come this far dear reader, you are my personal hero. This was quite a long one, and we haven't done anything fun or practical. However, we have hopefully gone from looking at LLMs as these magic things that somehow know everything, to now understanding that everything is just..... maths. _Sigh_.
 
