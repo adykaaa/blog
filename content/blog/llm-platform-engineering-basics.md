@@ -39,7 +39,7 @@ Stage 7 might have to wait a bit for a few companies -- but I have a really stro
 
 You could ask me who the target audience for this series really is.... and honestly? **Me**. I realized that I solidify concepts much more easily if I write them down -- but I also believe platform engineers who have experience in the field but don't know anything about inference engineering will also benefit from this (_or at least I hope_). This means that throughout my posts I'm not going to explain basic concepts related to K8s, monitoring, distributed systems, etc. -- only those that are related to what a particular article is about.
 
-This article in particular is going to be **dense and theory-heavy** and won't have a lot to do with platform engineering, but the truth is that we must understand many things about LLM inference architecture just enough (_as platform engineers, we don't really care about the underlying math of the models, SoftMax functions, tensor transformations and so on_) to be able to reason about **operating + debugging + observing + serving** them. I'll try to focus in on the important and fundamental parts.
+This article is going to be **dense and theory-heavy** and won't have a lot to do with platform engineering, but the truth is that we must understand many things about LLM inference architecture just enough (_as platform engineers, we don't really care about the underlying math of the models, SoftMax functions, tensor transformations and so on_) to be able to reason about **operating + debugging + observing + serving** them. I'll try to focus in on the important and fundamental parts.
 Don't worry, in the **upcoming parts** of the series we'll actually deploy stuff into K8s, have awesome dashboards in Grafana, understand model serving, special load balancing, and more.
 
 For the really lazy readers (**I'm talking about you, Dhruv**), every section will have a short **Takeaway**.
@@ -57,13 +57,15 @@ We know that for the workloads we are used to, computation happens on the CPU --
 
 Without going into too much detail about the actual hardware architecture of CPUs and GPUs, the main thing to remember is that **CPUs** have a **few powerful cores** that are great at executing a smaller number of complex instructions (compared to the GPU) very quickly: application logic, web servers, databases, operating systems -- so operations that require a lot of branching and complexity. **GPUs**, on the other hand, have **thousands of smaller cores** that are great at executing simple arithmetic operations (a LOT of them) over and over again. Spoiler alert: LLMs require the latter.
 
-Another issue is **bandwidth**: high-end server CPUs are capable of moving a _few hundred GB_ per second from RAM (DRAM → memory controller → CPU caches (L3/L2/L1) → registers/vector units → computation), whereas GPUs are capable of moving _multiple TB_ per second from their high-bandwidth memory units towards the computation cores (HBM → GPU cache/shared memory/registers → tensor cores → computation). **HBM** stands for High Bandwidth Memory, which is specifically designed for ultra-high bandwidth and low latency, and tensor cores are a type of GPU core specialized at the hardware level to perform billions of **matrix operations** faster than any "regular" cores.
+Another issue is **bandwidth**: high-end server CPUs are capable of moving a _few hundred GB_ per second from RAM (DRAM → memory controller → CPU caches (L3/L2/L1) → registers/vector units → computation), whereas GPUs are capable of moving _multiple TB_ per second from their high-bandwidth memory units towards the computation cores (HBM → GPU cache/shared memory/registers → **tensor cores** → computation) -- as we'll learn later in a few sections, LLMs require really high bandwith.
+
+**HBM** in GPUs stands for High Bandwidth Memory, which is specifically designed for ultra-high bandwidth and low latency, and tensor cores are a type of GPU core specialized at the hardware level to perform billions of **matrix operations** faster than any "regular" cores.
 
 ### Matrix operations, model size, GPU numbers
 
-LLMs need to execute a **huge number of matrix operations** because nearly every major step in a **transformer** (where these matrix calculations take place) is built from linear algebra (bleh). Each token is represented as a **vector** of numbers, and the LLM repeatedly multiplies these vectors by large weight matrices. Since this happens across many tokens, many layers, and billions of learned parameters, a single generated token can require an enormous number of multiply-and-accumulate operations. These operations are not complex, but they happen billions of times over and over, which makes GPUs much better suited to this work because of their architecture.
+LLMs need to execute a **huge number of matrix operations** because nearly every major step in a **transformer** (where these matrix calculations take place) is built from linear algebra (bleh). Each token is represented as a **vector** of numbers, and the LLM repeatedly multiplies these vectors by large weight matrices. Since this happens across many tokens, many layers, and billions of learned parameters, a single generated token can require an **enormous number of multiply-and-accumulate operations**. These operations are not complex but they happen **billions of times over and over**, which makes GPUs much better suited to this work because of their architecture.
 
-GPU numbers we generally care about:
+**GPU numbers** we generally care about:
 
 - **compute** (how much math the GPU can do, measured in FLOPS)
 - **capacity** (how much data, including model weights, fits in GPU memory. Measured in GB or TB of `VRAM`.)
@@ -85,7 +87,7 @@ LLM stands for Large Language **Model**, so it would be great to understand what
 
 ### HuggingFace
 
-[HuggingFace](https://huggingface.co), in essence, is the **GitHub for models**. Here you can browse more than 2 million open-source model repos, as well as datasets for training models. It's best to get familiar with this website, as later on in our actual tutorials we'll use HuggingFace to download the LLM we are going to be experimenting with (also HF seems to be the industry standard for storing models as of the writing of this article).
+[HuggingFace](https://huggingface.co), in essence is the **GitHub for models**. Here you can browse more than 2 million open-source model repos, as well as datasets for training models. It's best to get familiar with this website, as later on in our actual tutorials we'll use HuggingFace to download the LLM we are going to be experimenting with (also HF seems to be the industry standard for storing models as of the writing of this article).
 
 ### Inside the model file
 
@@ -94,7 +96,6 @@ Let's look at the files for the [SmolLM2 with 135 million parameters](https://hu
 ![LLM files on HuggingFace](/blog/images/llm-platform-engineering-overview/smollm2.png)
 
 When we talk about **the model**, this is the file we are mostly referencing. _safetensors_ is a new simple format for storing tensors safely. A **tensor** essentially is a multidimensional array of numbers which are used by LLMs to store things like model weights, token embeddings, activation values, etc. for matrix operations (so many complex words to understand... but we'll get there).
-Unlike formats based on Python [pickle](https://docs.python.org/3/library/pickle.html), which was used in the past to store models, it does not allow arbitrary code execution when loading model weights, making it safer for sharing and downloading models. It's also designed to be suuuuper fast.
 
 To see inside the **model**, let's install the _safetensors_ Python module and the _torch_ module:
 
@@ -174,13 +175,13 @@ The whole process of running the trained model to produce an output is called **
 
 #### Takeaway
 
-The word **inference** refers to the process of actually running the model and getting the output based on the inputs. LLMs are not magic. They are word predictor machines.
+The word **inference** refers to the process of actually running the model and getting the output based on the inputs. LLMs are not magic. They are token predictor machines.
 
 ### Tokenization and Embeddings
 
 **Tokenization** is the process of splitting the input text (aka your prompt) into smaller units called _tokens_ which are then converted into simple numbers. LLMs cannot work on strings because they have variable lengths, discrete symbols, and they have no useful representation in maths -- which we know is desperately needed because in LLM land everything is about matrices.
 
-So let's see via an example how our prompts are turned into tokens with our simple prompt _"Hello, how are you?"_.
+So let's see via an example how prompts are turned into tokens with a simple "Hello, how are you?" prompt:
 
 Install the transformers Python package:
 
@@ -242,7 +243,7 @@ This **embedding table is part of the model's learned weights**, so it is just a
 
 FTR, the embedding table takes up some memory as well. [Qwen2.5-0.5B's configuration](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct/blob/main/config.json) specifies **151,936** vocabulary entries and **896** dimensions. That's `151,936 × 896 = 136,134,656` parameters -- roughly **260 MiB at two bytes per parameter**, just for the input embedding table!
 
-(NOTE: you'll also hear about **embeddings for semantic search and RAG**. Here we're talking about the LLM's **internal, per-token embedding lookup**. Search systems typically use an embedding model to produce a vector representing a whole query or text chunk, which can then be compared with other vectors.)
+(NOTE: you'll also hear about **embeddings for semantic search and RAG**. Here we're talking about the LLM's **internal, per-token embedding lookup**)
 
 #### Where the CPU and GPU come in
 
