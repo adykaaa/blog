@@ -42,7 +42,7 @@ You could ask me who the target audience for this series really is.... and hones
 This article in particular is going to be **dense and theory-heavy** and won't have a lot to do with platform engineering, but the truth is that we must understand many things about LLM inference architecture just enough (_as platform engineers, we don't really care about the underlying math of the models, SoftMax functions, tensor transformations and so on_) to be able to reason about **operating + debugging + observing + serving** them. I'll try to focus in on the important and fundamental parts.
 Don't worry, in the **upcoming parts** of the series we'll actually deploy stuff into K8s, have awesome dashboards in Grafana, understand model serving, special load balancing, and more.
 
-For the really lazy readers (**I'm talking about you, Dhruv**), every section will have a short Takeaway.
+For the really lazy readers (**I'm talking about you, Dhruv**), every section will have a short **Takeaway**.
 
 So let's roll.
 
@@ -807,7 +807,7 @@ K_bank
 K_dot
 ```
 
-and all their corresponding `V`s, it simply retrieves them from the `KV Cache` so that `Q_sure` can then attend against all of those cached `K`s and use their corresponding cached `V`s! Awesome.
+and all their corresponding `V`s, **it simply retrieves them from the `KV Cache` so that `Q_sure` can then attend against all of those cached `K`s and use their corresponding cached `V`s**! Awesome.
 
 The model continues processing `Sure` through the rest of its layers and eventually produces the next token:
 
@@ -929,7 +929,13 @@ This should also bring up a LOT of questions in you, such as:
 - can we reuse reserved but unitilized blocks in `VRAM` for another user's `KV Cache`?
 - can we store the KV Cache more efficiently? Can we store it across multiple GPUs?
 
-But wait, there's much more -- who wants to run inference for only 1 user? We want to be able to serve an LLM for **multiple users at the same time concurrently** which magnifies these problems even more, and brings even MORE juicy questions with it.
+But wait, who wants to run inference for only 1 user? We want to be able to serve an LLM for **multiple users at the same time concurrently** which magnifies these problems even more, and brings even MORE juicy questions with it. We will touch on these in later articles, don't worry.
 
 **Takeaway**: The `KV Cache` lives in GPU memory and stores the `K`s and `V`s of previously processed tokens so that we don't have to recalculate them during **autoregressive generation**. Its size grows roughly linearly with the number of tokens in a sequence and every active request needs **KV-cache memory of its own**.
 This means GPU capacity isn't only about whether the model fits, but it also determines how much room remains for the `KV Caches` of active requests — and therefore has a **huge impact on how much concurrency an inference server can actually support**. The KV Cache also has to be read during decode, meaning it contributes not only to VRAM capacity usage but also to **memory-bandwidth pressure** as well.
+
+### Conclusion
+
+If you've come this far dear reader, you are my personal hero. This was quite a long one, and we haven't even done anything fun or practical. However, we have hopefully gone from looking at LLMs as these magic things knowing everything somehow, to now understanding that everything is just..... maths. _Sigh_.
+
+Now that we understand the most important parts of the inference workflow on a high level, we can start looking at more practical examples, and build our understanding further. In the next article we will serve our first model, talk about what the heck `vLLM` is, and observe a few things. LFG!
