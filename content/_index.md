@@ -1,3 +1,3 @@
 ---
-title: "Adam Toth"
+title: "Adam Toth's engineering blog"
 ---

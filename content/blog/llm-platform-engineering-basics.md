@@ -684,7 +684,7 @@ The answer to both of these is the `KV Cache`. Prefill is called prefill because
 
 What a weird yet simple name... `KV Cache`. Now you must be thinking: why only `K` and `V` cache? Why not `QKVO Cache`?
 
-During prefill, all of the `Q`, `K`, `V`, and `O`s are calculated for the input context for every token that the model is processing. Let's step back to the definitions for a sec:
+During computation, all of the `Q`, `K`, `V`, and `O`s are calculated for the input context for every token that the model is processing. Let's step back to the definitions for a sec:
 
 ```text
 Query = What information am I looking for in other tokens?
@@ -748,9 +748,9 @@ The important part is that:
 
 **K_take, V_take, K_me, V_me, K_OTP, V_OTP, etc. have not changed**
 
-Adding `Sure` to the end of the sequence does not suddenly change what information the previous token `OTP` contains or how future tokens should match against it. Its `K` and `V` were calculated when `OTP` was originally processed and because of **causal attention** they remain valid for every token that comes after it.
+**Adding `Sure` to the end of the sequence does not suddenly change what information the previous token `OTP` contains or how future tokens should match against it**. Its `K` and `V` were calculated when `OTP` was originally processed and because of **causal attention** they remain valid for every token that comes after it.
 
-For these reasons (_and more_) **prefill** _prefills_ the cache with `K`s and `V`s of all the tokens it has processed so that when another token goes through the model, they won't have to do these calculations over and over again in vein (of course, the new token's `K`s and `V`s are also added to the cache once the model has calculated them, and so on).
+For these reasons (_and more_) **prefill** _prefills_ the cache with `K`s and `V`s of all the tokens it has processed so that when another token goes through the model, they won't have to do these calculations over and over again in vein (of course, the new token's `K`s and `V`s are also added to the cache once the model has calculated them during decode, and so on).
 
 So we are basically here in the process:
 ![Prefill KV-cache](/blog/images/llm-platform-engineering-overview/prefill-kv-cache.png)
@@ -759,7 +759,7 @@ So we are basically here in the process:
 
 In the **decode** section we said that all work that prefill has done for calculating the tokens is not wasted, which we have proven above. We have also said that during decode the model does **autoregressive generation** meaning the process of coming up with the output tokens is mostly sequential (_there are some [optimizations and techniques](https://developer.nvidia.com/blog/an-introduction-to-speculative-decoding-for-reducing-latency-in-ai-inference/) to get around this, but we'll talk about this in a much later article_) because token `n+1` needs the info from token `0..n`.
 
-During decode every newly generated token gets processed through the model but instead of recalculating the Ks and Vs for the entire context again, **the attention layers simply reach into the KV Cache and reuse the ones we've already calculated**.
+During decode every newly generated token gets processed through the model but instead of recalculating the `K`s and `V`s for the entire context again, **the attention layers simply reach into the KV Cache and reuse the ones we've already calculated**.
 
 After prefill we have processed:
 
@@ -857,4 +857,12 @@ and then add its own `K`s and `V`s, and so on until the whole decode process is 
 
 ![Decode KV-cache](/blog/images/llm-platform-engineering-overview/decode-kv-cache.png)
 
+and this is obviously true for **multiple prompts and long convos**. More on this in the next part.
+
 #### But where does the KV Cache live?
+
+The cache lives in the `VRAM` of our **GPU**, alongside the **model**. The reason for this is simple: accessing the cache needs to be super fast, and should not go through unnecessary networking hops... if we had to add a networking hop or two to every KV cache access, decode would be painfully slow.
+
+![KV Cache VRAM](/blog/images/llm-platform-engineering-overview/KV-Cache-VRAM.png)
+
+Engineering is all about tradeoffs (_remember all that intense system design interview prep you were doing for your current company, where you had to showcase how senior you are by how many times you said "it depends", "trade off", "sharding", and "eventual consistency"?_), and now we have managed to **trade a compute problem for a VRAM capacity problem**. If we didn't have the **KV Cache** we would have to calculate all the values for all the tokens every time making the cores work really hard but with the cache we reduce repeated computation at the cost of consuming more memory in the long run.
