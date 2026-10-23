@@ -57,9 +57,9 @@ We know that for the workloads we are used to, computation happens on the CPU --
 
 Without going into too much detail about the actual hardware architecture of CPUs and GPUs, the main thing to remember is that **CPUs** have a **few powerful cores** that are great at executing a smaller number of complex instructions (compared to the GPU) very quickly: application logic, web servers, databases, operating systems -- so operations that require a lot of branching and complexity. **GPUs**, on the other hand, have **thousands of smaller cores** that are great at executing simple arithmetic operations (a LOT of them) over and over again. Spoiler alert: LLMs require the latter.
 
-Another issue is **bandwidth**: high-end server CPUs are capable of moving a _few hundred GB_ per second from RAM (DRAM → memory controller → CPU caches (L3/L2/L1) → registers/vector units → computation), whereas GPUs are capable of moving _multiple TB_ per second from their high-bandwidth memory units towards the computation cores (HBM → GPU cache/shared memory/registers → **tensor cores** → computation) -- as we'll learn later in a few sections, LLMs require really high bandwith.
+Another issue is **bandwidth**: high-end server CPUs are capable of moving a _few hundred GB_ per second from RAM (DRAM → memory controller → CPU caches (L3/L2/L1) → registers/vector units → computation), whereas GPUs are capable of moving _multiple TB_ per second from their high-bandwidth memory units towards the computation cores (HBM → GPU cache/shared memory/registers → cores (including **tensor cores**) → computation) -- as we'll learn later in a few sections, LLMs require really high bandwith.
 
-**HBM** in GPUs stands for High Bandwidth Memory, which is specifically designed for ultra-high bandwidth and low latency, and tensor cores are a type of GPU core specialized at the hardware level to perform billions of **matrix operations** faster than any "regular" cores.
+**HBM** in GPUs stands for High Bandwidth Memory, which is specifically designed for ultra-high bandwidth, and tensor cores are a type of GPU core specialized at the hardware level to perform billions of **matrix operations** faster than any "regular" cores.
 
 ### Matrix operations, model size, GPU numbers
 
@@ -95,7 +95,7 @@ Let's look at the files for the [SmolLM2 with 135 million parameters](https://hu
 
 ![LLM files on HuggingFace](/blog/images/llm-platform-engineering-overview/smollm2.png)
 
-When we talk about **the model**, this is the file we are mostly referencing. _safetensors_ is a new simple format for storing tensors safely. A **tensor** essentially is a multidimensional array of numbers which are used by LLMs to store things like model weights, token embeddings, activation values, etc. for matrix operations (so many complex words to understand... but we'll get there).
+When we talk about **the model**, this is the file we are mostly referencing. _safetensors_ is a new simple format for storing tensors safely. A **tensor** essentially is a multidimensional array of numbers which are used by LLMs to store things like model weights, token embeddings, etc. for matrix operations (so many complex words to understand... but we'll get there).
 
 To see inside the **model**, let's install the _safetensors_ Python module and the _torch_ module:
 
@@ -310,7 +310,7 @@ In the decoder-only LLMs we care about here, **each token can attend to itself a
 Take me to the nearest OTP bank.
 ```
 
-the token `nearest` only has attention scores for the token representations of `["Take", "me", "to", "the", "nearest"]` but not `bank` and `.`. This is called _causal self-attention_. There are many other types of attention mechanisms. If you are interested, read about them here: [link](https://www.turingpost.com/p/attention-types).
+the token `nearest` only has attention scores for the token representations of `["Take", "me", "to", "the", "nearest"]` but not `OTP`, `bank` and `.`. This is called _causal self-attention_. There are many other types of attention mechanisms. If you are interested, read about them here: [link](https://www.turingpost.com/p/attention-types).
 
 #### Attention heads
 
@@ -569,13 +569,13 @@ To produce the LLM's final answer, however (_"Sure thing boss..."_), it goes thr
 If you've reached this point, you might feel **betrayed**. At the beginning of the article I told you that we will get just enough info as platform engineers to have a sufficient amount of understanding for inference, and now you've seen variables such as `Q`, `K`, `V`, you've seen matrix operations, probabilities, attention, etc.
 
 The point I'd like to get across in this section (_besides you not showcasing the surprised Pikachu face when someone mentions any of these words_) is how **computationally heavy** and **memory demanding** calculating `Q`, `K`, `V`, and `O` is **for a single token** in a relatively big model.
-`Llama 3.1-70B` (8,192 dimensions, 80 layers, 64 attention heads, etc.) performs more than **70 BILLION!!!** scalar multiplications for pushing **1 token through**.... out of these, more than **12 BILLION** operations are used for calculating the `Q`, `K`, `V`, and `O` projections. These also need to be stored somewhere, and for `LLama 3.1-70B` `Q`, `K`, `V`, and `O` occupy ~**3MB** per token.
+`Llama 3.1-70B` (8,192 dimensions, 80 layers, 64 attention heads, etc.) performs more than **70 BILLION!!!** scalar multiplications for pushing **1 token through**.... out of these, more than **12 BILLION** operations are used for calculating the `Q`, `K`, `V`, and `O` projections. These also need to be stored somewhere, and for `LLama 3.1-70B` `Q`, `K`, `V`, and `O` occupy ~**3MB** per token (_in a following section we'll learn that only `K` and `V` are stored for later reuse, so technically the number is lower than 3MB_).
 
 There’s also an important **performance consequence** hiding in all of this. When the model processes token `n+1`, its `Query` needs to attend to the `Keys` and `Values` of the tokens that came before it. **So the more tokens there are in the context, the more previous information each new token has to consider**. In practice, this means longer conversations generally make inference waaaaaay more **expensive** as they increase the work before the first token appears, and can also make each generated token slower as the context grows. Long context heavily affects both **latency** and **memory**, so the next three concepts we are about to dive head first into matter so much for understanding inference performance (prefill, decode, KV cache).
 
 #### Takeaway
 
-`Q`, `K`, `V`, and `O` are vector representations calculated for **every token** in **every attention layer** during inference using **weights** that are part of the model and were learned during training. `Q` and `K` are used to figure out which tokens are relevant to each other, `V` carries the information that gets mixed together based on that relevance, and `O` is the transformed result of the attention calculation. These calculations happen over and over again across tokens and layers, which makes them both **compute- and memory-heavy**. Token `n+1` usually needs to have access to the `K`s and `V`s of every other token that comes before it (`0..n+1)` and its own `K`, `V`, `Q` and `O`, so a bigger context window means more work.
+`Q`, `K`, `V`, and `O` are vector representations calculated for **every token** in **every attention layer** during inference using **weights** that are part of the model and were learned during training. `Q` and `K` are used to figure out which tokens are relevant to each other, `V` carries the information that gets mixed together based on that relevance, and `O` is the transformed result of the attention calculation. These calculations happen over and over again across tokens and layers, which makes them both **compute- and memory-heavy**. Token `n+1` usually needs to have access to the `K`s and `V`s of every other token that comes before it (`0..n)` and its own `K`, `V`, `Q` and `O`, so a bigger context window means more work.
 
 ### Prefill
 
@@ -593,7 +593,7 @@ In every attention layer, `Q`, `K`, and `V` are calculated **for all tokens at t
 ![Parallel prefill](/blog/images/llm-platform-engineering-overview/prefill-parallel.png)
 
 This parallel processing is really **important**. Back in our **GPU section** I said that there's a part of inference which is really **compute heavy** -- well guess what, it's **prefill**.
-On a super high level, during prefill the **model** gets loaded out of the `VRAM` (in batches) **once** into the arithmetic units and caches, and then **thousands of GPU cores** (the specialized _tensor_ cores we've touched on) start firing **at the same time** for all of our input tokens to do the calculations required to produce the first token:
+On a super high level, during prefill the **model** gets loaded out of the `VRAM` (in batches) **once** into the arithmetic units and caches, and then **thousands of GPU cores** (in them hundreds of _tensor_ cores we've touched on) start firing **at the same time** for all of our input tokens to do the calculations required to produce the first token:
 
 ![Model load once](/blog/images/llm-platform-engineering-overview/gpu-arith.png)
 
