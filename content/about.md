@@ -28,9 +28,7 @@ I write here to clarify my own thinking. Topics include:
 
 Posts tend to be technical and opinionated. I'd rather be specific and occasionally wrong than vague and always safe. These posts only represent **my view of the world, and they are not related to what my employer(s) think**.
 
-**Disclaimer**: None of my posts are going to be **AI slop**. I write everything by hand here. Yes I use AI to generate diagrams, check my spelling, generate some boilerplate scripts that will help setting up some stuff, but other than that this is all **me**.
-
-I have been using **em-dashes way before LLMs came to be** -- so expect them, and believe it's still me writing these.
+Update: in October of 2026 I have removed most of my previous posts to start with a clean slate. I want this blog to be focused on platform engineering, K8s, etc. rather than lower level coding stuff.
 
 ## Outside work
 
