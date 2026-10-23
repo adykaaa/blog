@@ -879,7 +879,7 @@ larger KV Cache
 more VRAM usage
 ```
 
-and the relationship is **linear with sequence length** -- so computation for 10.000 tokens requires _roughly_ twice as much space in the KV Cache as it does for 5000 tokens... but how much exactly?
+and the relationship is **linear with sequence length** -- so computation for 10.000 tokens requires _roughly_ twice as much space in the KV Cache as it does for 5000 tokens... **but how much exactly**?
 
 If we look at `LLama 3.1-70B` it has
 
@@ -902,4 +902,31 @@ KV cache per token ≈
 × 2 bytes          # BF16 -- we store the values in 2 bytes (precision related stuff, will talk about it in a future article)
 ```
 
-which roughly equals 327680 bytes aka. **320 KiB per token** which is insanely big! If we have a prompt that is 100.000 tokens, this becomes more than `30 GiB`!!!!! `30 GiB` from our precious `VRAM` just for 1 big prompt.
+which roughly equals 327680 bytes aka. **320 KiB per token** which is insanely big! If we have a prompt + answer that equals 100.000 tokens, this becomes more than `30 GiB` from our precious `VRAM` **just for 1 request + reply for 1 user**. This fact alone brings a lot of cool engineering problems with it.
+
+The above was just for 1 request from the user and 1 response from the LLM (so one **turn**). We obviously want to **preserve and reuse the KV state for the tokens that remain in the model's context across multiple turns**. We cannot just fill up the cache with `K`s and `V`s of just one turn and throw it away, because it would mean having to run prefill against ALL the input tokens to start generating the answer of the second turn, and so on.
+
+This is quite logical if we think about it from a high level tho:
+
+```text
+request 1 -> response 1
+request 2 -> response 2 (but LLM needs context of request 1 AND response 1 as well potentially to answer)
+request 3 -> response 3 (but LLM needs context of request 1+2 AND the response 1+2 as well potentially to answer)
+```
+
+So the solution is to **keep filling the** `KV Cache` with every `K` and `V` of every request and response:
+![Growing Cache](/blog/images/llm-platform-engineering-overview/growing-cache-for-turns.png)
+
+so the cache keeps growing with the conversation.
+
+This should also bring up a LOT of questions in you, such as:
+
+- what should be the max size of a `KV Cache` for a user?
+- do we reserve the same cache size for every user?
+- when should we stop admitting in requests?
+- how much `VRAM` capacity do we need for the caches? How much GPU should we pay for?
+- when do we evict the `KV Cache` of a user? How long do we let it grow? (_ahhh... cache invalidation strikes again!_)
+- can we reuse reserved but unitilized blocks in `VRAM` for another user's `KV Cache`?
+- can we store the KV Cache more efficiently? Can we store it across multiple GPUs?
+
+But wait, there's much more -- who wants to run inference for only 1 user? We want to be able to serve an LLM for **multiple users at the same time concurrently** which magnifies these problems even more, and brings even MORE juicy questions with it.
