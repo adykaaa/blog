@@ -32,7 +32,7 @@ Update: in October of 2026 I have removed most of my previous posts to start wit
 
 ## Outside work
 
-I spend most of my time with my family. When I get some time (aka. the baby girl decides to show mercy and sleeps) I work on various side projects, and study a lot. Not because I have to, but because I just love doing this. One of the biggest gifts is the fact that I don't really look at tech as "work" but more like the thing that I really like spending time on. Once this changes, I might become the goat farmer I was always meant to be.
+I spend most of my time with my family. When I get some time (aka. the baby girl decides to show mercy and sleeps) I work on various side projects, and study a lot. Not because I have to, but because I just love doing this. One of the biggest gifts is the fact that I don't really look at tech as "work" but more like the thing that I really like spending time on. Once this changes, **I might become the goat farmer I was always meant to be**.
 
 ## Get in touch
 
