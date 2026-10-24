@@ -789,9 +789,10 @@ Take me to the nearest OTP bank.
 
 and our KV Cache already contains the `K`s and `V`s belonging to those tokens:
 
-KV Cache:
-
 ```text
+KV Cache
+
+
 Take -> K_take, V_take
 me -> K_me, V_me
 to -> K_to, V_to
