@@ -11,8 +11,8 @@
 # https://opentelemetry.io/docs/platforms/kubernetes/helm/collector/
 # https://github.com/openlit/openlit
 # https://github.com/grafana-community/helm-charts
-# Usage: ./llm-obs-setup.sh
-# Preview: RENDER_ONLY=1 ./llm-obs-setup.sh
+# Usage: ./01-llm-obs-setup.sh
+# Preview: RENDER_ONLY=1 ./01-llm-obs-setup.sh
 # Data is local PVC storage; deleting the minikube profile deletes the data.
 set -Eeuo pipefail
 umask 077

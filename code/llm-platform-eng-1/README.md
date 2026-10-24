@@ -1,6 +1,6 @@
 # Local LLM observability sandbox
 
-[llm-obs-setup.sh](./llm-obs-setup.sh) detects Linux or macOS, creates a minikube cluster, and installs OpenTelemetry Collector, OpenLIT Community Edition with ClickHouse, Loki, Tempo, Grafana, and a small Prometheus instance for metrics.
+[01-llm-obs-setup.sh](./01-llm-obs-setup.sh) detects Linux or macOS, creates a minikube cluster, and installs OpenTelemetry Collector, OpenLIT Community Edition with ClickHouse, Loki, Tempo, Grafana, and a small Prometheus instance for metrics.
 
 Grafana comes with Loki, Tempo, and Prometheus data sources. **No dashboards or sample telemetry are created.** The script checks service readiness and Grafana HTTP health, without a telemetry smoke test.
 
@@ -145,14 +145,14 @@ rm -rf /tmp/llm-obs-venv-check
 From this directory, on either supported OS:
 
 ```bash
-bash ./llm-obs-setup.sh
+bash ./01-llm-obs-setup.sh
 ```
 
 Or download just the script from `main`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/adykaaa/blog/main/code/llm-platform-eng-1/llm-obs-setup.sh -o llm-obs-setup.sh
-bash llm-obs-setup.sh
+curl -fsSL https://raw.githubusercontent.com/adykaaa/blog/main/code/llm-platform-eng-1/01-llm-obs-setup.sh -o 01-llm-obs-setup.sh
+bash 01-llm-obs-setup.sh
 ```
 
 Replace `main` with a commit SHA or release tag to download a fixed script revision. Application/chart versions still resolve dynamically unless overridden.
@@ -174,7 +174,7 @@ Removing dashboard provisioning and the smoke test does not erase data or dashbo
 ## Configuration
 
 ```bash
-CPUS=6 MEMORY=12288 GRAFANA_PORT=3002 bash ./llm-obs-setup.sh
+CPUS=6 MEMORY=12288 GRAFANA_PORT=3002 bash ./01-llm-obs-setup.sh
 ```
 
 | Variable         | Default                                                  | Purpose                                                                      |
@@ -196,7 +196,7 @@ CPUS=6 MEMORY=12288 GRAFANA_PORT=3002 bash ./llm-obs-setup.sh
 Preview mode needs Bash, standard utilities, Helm, curl, Python 3.10+, and network access already installed; it never bootstraps packages or CLIs. It updates Helm repository metadata and writes generated files:
 
 ```bash
-RENDER_ONLY=1 bash ./llm-obs-setup.sh
+RENDER_ONLY=1 bash ./01-llm-obs-setup.sh
 ```
 
 To pin versions, override `LOKI_VERSION`, `TEMPO_VERSION`, `GRAFANA_VERSION`, `OTEL_VERSION`, `OPENLIT_VERSION`, and `PROMETHEUS_VERSION`. All except Prometheus also support `*_CHART_VERSION`. Use application versions without a leading `v` or `openlit-` prefix. Selections are saved in `versions.env`; Python packages are recorded in `python-requirements.lock`. These are records, not automatically loaded on subsequent runs.
