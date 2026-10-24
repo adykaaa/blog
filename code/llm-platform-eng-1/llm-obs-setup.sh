@@ -664,20 +664,6 @@ OTLP HTTP: http://127.0.0.1:$OTLP_HTTP_PORT
 OTLP gRPC: 127.0.0.1:$OTLP_GRPC_PORT
 In-cluster OTLP HTTP: http://otel.$NAMESPACE.svc.cluster.local:4318
 
-Instrument a Python agent (install its dependencies into this venv first):
-  source "$STATE_DIR/agent.env"
-  "$STATE_DIR/venv/bin/openlit-instrument" "$STATE_DIR/venv/bin/python" your_agent.py
-For an existing agent venv, run: python -m pip install --upgrade openlit
-Then source agent.env and run: openlit-instrument python your_agent.py
-For containerized Python agents, install openlit in the image, set the in-cluster
-OTLP endpoint above, and launch with: openlit-instrument python your_agent.py
-
-The SDK instruments supported frameworks; installing this stack alone does not
-instrument already-running agents. Kubernetes stdout/stderr logs are collected
-from this single minikube node. Host agents must explicitly export OTLP logs
-(e.g. an OTel logging handler); SDK traces do not automatically capture stdout.
-Structured application logs should include trace_id for log-to-trace links.
-
 Forwarding runs in the background and reconnects after pod/cluster restarts.
 To stop a forward, send TERM to the PID in its .pid file.
 Forward PIDs/logs, values and exact versions: $STATE_DIR
