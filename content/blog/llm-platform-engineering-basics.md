@@ -423,7 +423,7 @@ bank
 .
 ```
 
-By the time a token reaches an **attention layer**, the token is represented as a **vector**. The attention layer takes this vector and calculates `Q`, `K`, and `V` for each token (using `q_proj.weight`, `k_proj.weight`, and `v_proj.weight` that are part of the model):
+By the time a token reaches an **attention layer**, the token is represented as a **vector**. The attention layer takes this vector and calculates `Q`, `K`, and `V` for each token (using `q_proj.weight`, `k_proj.weight`, and `v_proj.weight` that are part of the model from the get-go):
 
 ```text
 Take     -> Q_take,     K_take,     V_take
