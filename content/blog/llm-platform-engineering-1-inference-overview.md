@@ -15,7 +15,11 @@ tags:
         "Prefill",
     ]
 draft: false
-aliases: ["/llm-platform-engineering-basics/", "/blog/llm-platform-engineering-basics/"]
+aliases:
+    [
+        "/llm-platform-engineering-basics/",
+        "/blog/llm-platform-engineering-basics/",
+    ]
 wideCode: true
 toc: true
 ---
@@ -956,4 +960,4 @@ If you've come this far dear reader, you are my personal hero.
 
 This was quite a long one, and we haven't done anything fun or practical. However, we have hopefully gone from looking at LLMs as these magic things that somehow know everything, to now understanding that everything is just..... maths and some comp-sci. _Sigh_.
 
-If you're like me, reading just the theory doesn't really solidify concepts -- so in the **next part** we will deploy our complete observability stack into `minikube` and not only will we deploy our **first local LLM**, but will also see some **phases** we've learnt about in this article in action. Let's go!
+If you're like me, reading just the theory doesn't really solidify concepts -- so in the **next part** we will deploy our complete observability stack into `minikube` and not only will we deploy our **first local LLM**, but we will also see some **phases** we've learnt about in this article **in action**. Let's go!
