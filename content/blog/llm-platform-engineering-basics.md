@@ -683,7 +683,7 @@ Where we store these will be revealed in the next section (_does it sound awfull
 
 #### Takeaway
 
-Decode is the phase where each output token in our LLM's answer gets generated sequentially. Prefill gets lots of computation out of each chunk of data moved from HBM to the compute units, whereas decode gets relatively little computation out of each chunk and needs to move data much more frequently, so **prefill is compute-bound** while **decode is memory-bandwidth-bound**. `TPOT` is an important metric describing the performance of decode.
+**Decode is the phase where each output token in our LLM's answer gets generated sequentially**. Prefill gets lots of computation out of each chunk of data moved from HBM to the compute units, whereas decode gets relatively little computation out of each chunk and needs to move data much more frequently just to generate a token, so **prefill is compute-bound** while **decode is memory-bandwidth-bound**. `TPOT` is an important metric describing the performance of decode.
 
 ### KV Cache
 
@@ -692,13 +692,13 @@ Finally we reach the section that answers two of the questions left hanging from
 - why is prefill called **prefill**? What does it prefill?
 - where do we **store the already calculated stuff** so that autoregressive token generation during decode only needs to calculate new stuff?
 
-The answer to both of these is the `KV Cache`. Prefill is called prefill because it _prefills the KV cache after it runs for all of the input context tokens in parallel_ so we are not throwing away stuff we already calculated -- **decode** will reach into this cache for values (and also fill this cache when it generates output tokens).
+The answer to both of these is the `KV Cache`. Prefill is called prefill because it _prefills the KV cache after it runs for all of the input context tokens in parallel_ so we are not throwing away stuff we already calculated -- **decode** will reach into this cache for values when it does the calculation for the next token in the LLM's answer, and also adds the information about the newly generated token into the cache.
 
 #### Why only `K` and `V` Cache?
 
 What a weird yet simple name... `KV Cache`. Now you must be thinking: why only `K` and `V` cache? Why not `QKVO Cache`?
 
-During computation, all of the `Q`, `K`, `V`, and `O`s are calculated for the input context for every token that the model is processing. Let's step back to the definitions for a sec:
+We know that during computation, all of the `Q`, `K`, `V`, and `O`s are calculated for the input context for every token that the model is processing, so how come only `K` and `V`˙? Let's step back to the definitions for a sec:
 
 ```text
 Query = What information am I looking for in other tokens?
@@ -709,13 +709,15 @@ Output = Combined output of the above
 
 According to these definitions (_and hopefully what we've learned in that section_), we can see that once the next token goes through processing there are two of the above vectors that will remain unchanged after the calculations, no matter the token we are processing them for: `K` and `V` because they describe what a token **contains** irrespective of what another token is looking for.
 
-Back to the bank example :) let's say we've already processed:
+To understand this, let's... you guessed it! Get back to our bank example.
+
+Let's say the model already processed:
 
 ```text
 Take me to the nearest OTP bank.
 ```
 
-and the model has generated the first token of our answer:
+and it has also generated the first token of our answer (aka. prefill is done):
 
 ```text
 Sure
@@ -727,7 +729,7 @@ Sure
 Q_sure = What information does "Sure" need from the tokens before it?
 ```
 
-`Q_sure` needs to compare itself against the `K`s of all the previous tokens:
+`Q_sure` needs to compare itself against the `K`s of all the previous token:
 
 ```text
 K_take
@@ -755,7 +757,7 @@ V_dot
 
 to actually retrieve the **information contributed by those tokens**.
 
-To be fair the previous tokens' `Q`s and `O`s haven't changed either. The difference is that we just don't care about them anymore.
+To be fair the previous tokens' `Q`s and `O`s haven't changed either. **The difference is that we just don't care about them anymore**.
 E.g. `Q_OTP` represented what `OTP` was looking for when it was being processed, but it was processed already so we don't need it anymore. When we process `Sure` we need a brand-new `Q_sure` instead. The previous `O`s have also already served their purpose while those tokens were being processed through the model. Future attention operations don't need them.
 
 The important part is that:
@@ -764,7 +766,7 @@ The important part is that:
 
 **Adding `Sure` to the end of the sequence does not suddenly change what information the previous token `OTP` contains or how future tokens should match against it**. Its `K` and `V` were calculated when `OTP` was originally processed and because of **causal attention** they remain valid for every token that comes after it.
 
-For these reasons (_and more_) **prefill** _prefills_ the cache with `K`s and `V`s of all the tokens it has processed so that when another token goes through the model, we won't have to do these calculations over and over again in vain (of course, the new token's `K`s and `V`s are also added to the cache once the model has calculated them during decode, and so on).
+For these reasons (_and more_) **prefill** _prefills_ the cache with `K`s and `V`s of **all the tokens it has processed** so that when another token goes through the model, the model won't have to do these calculations over and over again in vain.
 
 So we are basically here in the process:
 ![Prefill KV-cache](../../static/images/llm-platform-engineering-overview/prefill-kv-cache.png)
@@ -821,7 +823,7 @@ K_bank
 K_dot
 ```
 
-and all their corresponding `V`s, **it simply retrieves them from the `KV Cache` so that `Q_sure` can then attend to all of those cached `K`s and use their corresponding cached `V`s**! Awesome.
+and all their corresponding `V`s, **it simply retrieves them from the `KV Cache` so that `Q_sure` can then attend to all of those cached `K`s and use their corresponding cached `V`s**! Awesome. (_in your CRUD backend app you do the same, no? You first see if something is in the cache and retrieve it from there, instead of spending cycles on calculating it_)
 
 The model continues processing `Sure` through the rest of its layers and eventually produces the next token:
 
@@ -867,11 +869,9 @@ bank
 Sure
 ```
 
-The model then adds `thing`'s own `K`s and `V`s, and so on until the whole decode process is finished and the answer is given by the LLM!
+The model then adds `thing`'s own `K`s and `V`s, and this is repeated until the whole decode process is finished and the answer is given by the LLM!
 
 ![Decode KV-cache](../../static/images/llm-platform-engineering-overview/decode-kv-cache.png)
-
-and this is obviously true for **multiple prompts and long convos**. More on this in the next part.
 
 #### KV Cache and VRAM
 
@@ -879,7 +879,7 @@ The cache lives in the `VRAM` of our **GPU**, alongside the **model**. The reaso
 
 ![KV Cache VRAM](../../static/images/llm-platform-engineering-overview/KV-Cache-VRAM.png)
 
-Engineering is all about **tradeoffs** (_remember all that intense system design interview prep you were doing for your current company, where you had to showcase how senior you are by how many times you said "it depends", "tradeoff", "sharding", and "eventual consistency"?_), and now we have managed to **trade a compute problem for a VRAM capacity problem**. If we didn't have the **KV Cache** we would have to calculate all the values for all the tokens every time. That would make the cores work really hard. With the cache we reduce repeated computation at the cost of consuming more memory in the long run.
+Engineering is all about **tradeoffs** (_remember all that intense system design interview prep you were doing for your current company, where you had to showcase how senior you are by how many times you said "it depends", "tradeoff", "sharding", and "eventual consistency"?_), and now we have managed to **trade a compute problem for a VRAM capacity problem**. If we didn't have the **KV Cache** we would have to calculate all the values for all the tokens every time which would make the cores work really hard at all times. With the cache in place and filled up nicely however, we reduce repeated computation at the cost of **consuming more memory** in the long run.
 
 In the previous parts we have learnt that prefill adds a bunch of stuff into the cache, and decode reads from the cache and also adds stuff for each token it processes. Roughly we could say:
 
@@ -901,7 +901,7 @@ If we look at `LLama 3.1-70B` it has
 80 transformer layers
 8 KV heads
 128 dimensions per head
-BF16 = stores values in 2 bytes
+BF16 = stores each value in 2 bytes
 ```
 
 so the equation becomes
@@ -931,9 +931,9 @@ request 3 -> response 3 (but LLM needs context of request 1+2 AND the response 1
 So the solution is to **keep filling the** `KV Cache` with every `K` and `V` of every request and response:
 ![Growing Cache](../../static/images/llm-platform-engineering-overview/growing-cache-for-turns.png)
 
-so the cache keeps growing with the conversation.
+meaning the cache keeps growing with the conversation.
 
-This should also raise a LOT of questions for you, such as:
+This should also raise a LOT of questions in you, such as:
 
 - what should be the max size of a `KV Cache` for a user?
 - do we reserve the same cache size for every user?
@@ -943,15 +943,17 @@ This should also raise a LOT of questions for you, such as:
 - can we reuse reserved but unused blocks in `VRAM` for another user's `KV Cache`?
 - can we store the KV Cache more efficiently? Can we store it across multiple GPUs?
 
-But wait, who wants to run inference for only 1 user? We want to be able to serve an LLM for **multiple users at the same time concurrently** which magnifies these problems even more, and brings even MORE juicy questions with it. We will touch on these in later articles, don't worry.
+But wait, who wants to run inference for only 1 user? We want to be able to serve an LLM for **multiple users at the same time concurrently** which magnifies these problems even more, and brings even MORE juicy questions and engineering problems with it. We will touch on these in later articles, don't worry.
 
 **Takeaway**: The `KV Cache` lives in GPU memory and stores the `K`s and `V`s of previously processed tokens so that we don't have to recalculate them during **autoregressive generation**. Its size grows roughly linearly with the number of tokens in a sequence and every active request needs **KV-cache memory of its own**.
-This means GPU capacity isn't only about whether the model fits, but it also determines how much room remains for the `KV Caches` of active requests — and therefore has a **huge impact on how much concurrency an inference server can actually support**. The KV Cache also has to be read during decode, meaning it contributes not only to VRAM capacity usage but also to **memory-bandwidth pressure** as well.
+This means GPU capacity isn't only about whether the model fits, but it also determines how much room remains for the `KV Caches` of active requests — and therefore has a **huge impact on how much concurrency an inference server can actually support**. The KV Cache also has to be read during decode, meaning it contributes not only to `VRAM` capacity usage but also to **memory-bandwidth pressure** as well.
 
 ### Conclusion
 
+If you've come this far dear reader, you are my personal hero.
+
 ![Frodo](../../static/images/llm-platform-engineering-overview/frodo.jpg)
 
-If you've come this far dear reader, you are my personal hero. This was quite a long one, and we haven't done anything fun or practical. However, we have hopefully gone from looking at LLMs as these magic things that somehow know everything, to now understanding that everything is just..... maths. _Sigh_.
+This was quite a long one, and we haven't done anything fun or practical. However, we have hopefully gone from looking at LLMs as these magic things that somehow know everything, to now understanding that everything is just..... maths and some comp-sci. _Sigh_.
 
-If you're like me, reading just the theory doesn't really solidify concepts -- so in the **next part** we will deploy our complete observability stack into `minikube` and not only will we deploy our first local LLM, but will also see some phases we've learnt about in this article in action. Let's go!
+If you're like me, reading just the theory doesn't really solidify concepts -- so in the **next part** we will deploy our complete observability stack into `minikube` and not only will we deploy our **first local LLM**, but will also see some **phases** we've learnt about in this article in action. Let's go!
