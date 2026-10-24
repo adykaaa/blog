@@ -943,4 +943,4 @@ This means GPU capacity isn't only about whether the model fits, but it also det
 
 If you've come this far dear reader, you are my personal hero. This was quite a long one, and we haven't done anything fun or practical. However, we have hopefully gone from looking at LLMs as these magic things that somehow know everything, to now understanding that everything is just..... maths. _Sigh_.
 
-Now that we understand the most important parts of the inference workflow at a high level, we can start looking at more practical examples, and build our understanding further. In the **next part** we will serve our first model, try it out with prompts, and will see what we've learnt in this article in action. Sounds fire? Onwards to the next one!
+If you're like me, reading just the theory doesn't really solidify concepts -- so in the **next part** we will deploy our complete observability stack into `minikube` and not only will we deploy our first local LLM, but will also see some phases we've learnt about in this article in action. Let's go!
