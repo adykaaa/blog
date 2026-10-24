@@ -23,9 +23,9 @@ toc: true
 ## Intro
 
 Inference Platform Engineering is an area that is becoming increasingly popular due to the widespread use of LLMs everywhere. If we think about it, it makes perfect sense: you are not writing code by hand anymore, are you? :)
-However, the LLM you prompt to rewrite your perfectly working application to Rust needs to **run somewhere**. Today, 99% of the time, you don't care where. You just fire up Claude or the latest version of ChatGPT, which reads your prompt, waits a bit, and spits out the answer -- so you might ask: why would I even need to understand this?
+However, the LLM you prompt to rewrite your perfectly working application to Rust needs to **run somewhere**. Today, 99% of the time, you don't care where. You just fire up Claude or the latest version of ChatGPT, which reads your prompt, waits a bit, and spits out the answer -- so you might ask: why would I even need to understand how tun run an LLM then?
 
-The answer is simple: **this is not going to stay like this for long**. If you are working as part of an organization (mid-sized or big), you might have gone through the following stages (flawlessly communicated by your leadership):
+The answer is simple: **the situation is not going to stay like this for long**. If you are working as part of an organization (mid-sized or big), you might have gone through the following stages (flawlessly communicated by your leadership):
 
 1. **Stage 1:** LLMs are dangerous. We need to use them with caution!
 2. **Stage 2:** LLMs are super capable. Let's ship more features!
