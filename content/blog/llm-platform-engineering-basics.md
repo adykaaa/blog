@@ -647,7 +647,7 @@ Decode is the second and final big phase of the inference workflow where the out
 
 ![Decode gif](../../static/images/llm-platform-engineering-overview/decode-gif.gif)
 
-This also brings up an interesting point about **GPU resource usage** and what the **bottlenecks** are. Remember that in our GPU section we said that the GPU numbers we generally care about are:
+This also brings up an interesting point about **GPU resource usage** and what the **bottlenecks** are for prefill and decode. Remember that in our GPU section we said that the GPU numbers we generally care about are:
 
 - compute
 - capacity
@@ -665,24 +665,25 @@ For **decode**, however, the resource constraints change quite a bit. To be abso
 
 We've had an important metric for prefill called `TTFT` (Time To First Token). We also have a really important one for decode called `TPOT` (_Time Per Output Token_). `TPOT` measures approximately how long the model takes to generate each additional output token during the decode phase. E.g. if `TPOT` is measured to be `50 ms/token`, it means that it produces `20 tokens per second`.
 
-This is quite an important metric of decode, because it has really strong UX implications. If your users have to wait an eternity for the answer to come up, they'll be mad. A slow `TTFT` feels like the LLM froze trying to process our request. A slow `TPOT` feels like the LLM is really struggling to come up with the answer. Both of these are terrible.
+This is quite an important metric of decode, because it has really strong **UX implications**. If your users have to wait an eternity for the answer to come up, they'll be mad. A slow `TTFT` feels like the LLM froze trying to process our request. A slow `TPOT` feels like the LLM is really struggling to come up with the answer. Both of these are terrible, and combined they are a nightmare!
 
 #### Wasted work?
 
 If you've gone through the prefill section and the decode section this far and you haven't shouted at your monitor saying **WE ARE WASTING SO MANY RESOURCES FOR EACH TOKEN THAT WE CALCULATE DURING DECODE!!**, you might need to re-read things again.
 
-If I have an input context of `100.000` tokens, **prefill** calculates the `Q`s, `K`s, `V`s and all that stuff for them, produces the first output token, and then, to produce the second output token, **decode needs all the `Q`s, `K`s, `V`s, etc. for `100.001` tokens only to generate the second output token**. Since we know from our section on **attention** that this is true, does that mean that we are running the same calculations every single time + the calculation required for the new output token -- wasting a ton of work in each iteration? Fortunately, engineers designing LLMs are much smarter than that, and they have come up with a really simple proposition:
+If I have an input context of `100.000` tokens, **prefill** calculates the `Q`s, `K`s, `V`s and all that stuff for them, produces the first output token, and then to produce the second output token, **decode needs all the `Q`s, `K`s, `V`s, etc. for `100.001` tokens now**. Since we know from our section on **attention** that this is indeed the case, does that mean that we are running the same calculations every single time + the calculation required for the new output token -- wasting a ton of work in each iteration? Fortunately, engineers designing LLMs are much smarter than that, and they have come up with a really simple proposition:
 
 ```text
-Why don't we simply store the already calculated values somewhere,
+Why don't we simply store the already
+calculated values somewhere,
 so that only the new stuff needs to go through computation again?
 ```
 
-Where we store these will be revealed in the next section.
+Where we store these will be revealed in the next section (_does it sound awfully familiar? maybe... A CACHE?_).
 
 #### Takeaway
 
-Decode is the phase where each output token in our LLM's answer gets generated sequentially. Prefill gets lots of computation out of each chunk of data moved from HBM to the compute units. Decode gets relatively little computation out of each chunk of data moved and needs to move data much more frequently. Hence prefill is compute-bound, while decode is memory-bandwidth-bound. `TPOT` is an important metric describing the performance of decode.
+Decode is the phase where each output token in our LLM's answer gets generated sequentially. Prefill gets lots of computation out of each chunk of data moved from HBM to the compute units, whereas decode gets relatively little computation out of each chunk and needs to move data much more frequently, so **prefill is compute-bound** while **decode is memory-bandwidth-bound**. `TPOT` is an important metric describing the performance of decode.
 
 ### KV Cache
 
