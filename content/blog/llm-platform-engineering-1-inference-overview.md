@@ -15,7 +15,7 @@ tags:
         "Prefill",
     ]
 draft: false
-aliases: ["/blog/llm-platform-engineering-basics/"]
+aliases: ["/llm-platform-engineering-basics/", "/blog/llm-platform-engineering-basics/"]
 wideCode: true
 toc: true
 ---
