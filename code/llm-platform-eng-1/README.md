@@ -8,9 +8,9 @@ The script resolves the latest stable application releases and Helm charts and r
 
 ## Supported hosts
 
-| Host | Cluster behavior |
-| --- | --- |
-| Linux | NVIDIA GPU passthrough using Docker; requires NVIDIA drivers and Container Toolkit. |
+| Host                          | Cluster behavior                                                                        |
+| ----------------------------- | --------------------------------------------------------------------------------------- |
+| Linux                         | NVIDIA GPU passthrough using Docker; requires NVIDIA drivers and Container Toolkit.     |
 | macOS, Apple silicon or Intel | Docker driver, without GPU passthrough; requires a running Docker Desktop installation. |
 
 The macOS Docker/minikube path cannot expose Apple Metal GPUs to Kubernetes. You can run a model server natively on the Mac and instrument its clients, but GPU access from Kubernetes workloads is unavailable. See the [minikube GPU limitations](https://minikube.sigs.k8s.io/docs/tutorials/nvidia/) and [Docker driver documentation](https://minikube.sigs.k8s.io/docs/drivers/docker/). Windows and Linux AMD/Intel GPU setups are not covered.
@@ -21,18 +21,18 @@ Run the script as your normal Docker-enabled user, without wrapping the entire s
 
 Install **Docker** yourself, and on Linux install/configure the **NVIDIA driver and Container Toolkit**. On macOS, **Homebrew** is needed if a CLI dependency is missing. The script handles the tools below automatically; installed tools are reused, not overwritten or unnecessarily upgraded. An incompatible existing minikube/Helm version produces an actionable update message.
 
-| Dependency | Requirement |
-| --- | --- |
-| Docker | Docker Engine on Linux or Docker Desktop on macOS. The daemon must be running and `docker info` must succeed as the current user. |
-| NVIDIA GPU driver, Linux only | A compatible driver installed on the host; `nvidia-smi` must succeed. |
-| NVIDIA Container Toolkit, Linux only | Installed and configured for Docker GPU access. |
-| minikube, automatic | Installs if missing. Version 1.32 or newer; use a current stable release. The script uses the Docker driver and Docker container runtime. |
-| kubectl, automatic | Installs if missing. Must be compatible with the Kubernetes version used by minikube. |
-| Helm, automatic | Installs if missing. Version 3 or newer. |
-| Python, automatic | Installs if missing or older than 3.10, including `venv` and pip bootstrapping support. Linux distribution packages must provide Python 3.10+. |
-| Bash | Version 3.2 or newer; the Bash shipped with macOS is supported. Run with Bash, rather than `sh`. |
-| curl and CA certificates | macOS normally includes these; Linux bootstrapping installs curl and certificates if curl is missing. Working HTTPS is required. |
-| Standard host utilities | `cat`, `mkdir`, `rm`, `tee`, `sleep`, `uname`, `ps`, `install`, and `tar`; supplied by Linux/macOS. Python handles detached forwarding, so `setsid` is not required. |
+| Dependency                           | Requirement                                                                                                                                                          |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Docker                               | Docker Engine on Linux or Docker Desktop on macOS. The daemon must be running and `docker info` must succeed as the current user.                                    |
+| NVIDIA GPU driver, Linux only        | A compatible driver installed on the host; `nvidia-smi` must succeed.                                                                                                |
+| NVIDIA Container Toolkit, Linux only | Installed and configured for Docker GPU access.                                                                                                                      |
+| minikube, automatic                  | Installs if missing. Version 1.32 or newer; use a current stable release. The script uses the Docker driver and Docker container runtime.                            |
+| kubectl, automatic                   | Installs if missing. Must be compatible with the Kubernetes version used by minikube.                                                                                |
+| Helm, automatic                      | Installs if missing. Version 3 or newer.                                                                                                                             |
+| Python, automatic                    | Installs if missing or older than 3.10, including `venv` and pip bootstrapping support. Linux distribution packages must provide Python 3.10+.                       |
+| Bash                                 | Version 3.2 or newer; the Bash shipped with macOS is supported. Run with Bash, rather than `sh`.                                                                     |
+| curl and CA certificates             | macOS normally includes these; Linux bootstrapping installs curl and certificates if curl is missing. Working HTTPS is required.                                     |
+| Standard host utilities              | `cat`, `mkdir`, `rm`, `tee`, `sleep`, `uname`, `ps`, `install`, and `tar`; supplied by Linux/macOS. Python handles detached forwarding, so `setsid` is not required. |
 
 Official installation guides:
 
@@ -148,7 +148,7 @@ From this directory, on either supported OS:
 bash ./llm-obs-setup.sh
 ```
 
-Or download just the script, once it is pushed to `main`:
+Or download just the script from `main`:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/adykaaa/blog/main/code/llm-platform-eng-1/llm-obs-setup.sh -o llm-obs-setup.sh
@@ -159,13 +159,13 @@ Replace `main` with a commit SHA or release tag to download a fixed script revis
 
 The script enables storage add-ons, waits for the services, checks Grafana HTTP health, and prints the admin password. On Linux it also enables the NVIDIA device-plugin and waits for an allocatable GPU. Dashboards start empty; telemetry appears when you connect your agents.
 
-| Endpoint | Default URL/address |
-| --- | --- |
-| Grafana | http://localhost:3000 |
-| OpenLIT | http://localhost:3001 — create your local account |
-| OTLP HTTP | http://127.0.0.1:4318 |
-| OTLP gRPC | 127.0.0.1:4317 |
-| In-cluster OTLP HTTP | http://otel.llm-obs.svc.cluster.local:4318 |
+| Endpoint             | Default URL/address                               |
+| -------------------- | ------------------------------------------------- |
+| Grafana              | http://localhost:3000                             |
+| OpenLIT              | http://localhost:3001 — create your local account |
+| OTLP HTTP            | http://127.0.0.1:4318                             |
+| OTLP gRPC            | 127.0.0.1:4317                                    |
+| In-cluster OTLP HTTP | http://otel.llm-obs.svc.cluster.local:4318        |
 
 Forwarding binds to `127.0.0.1`; access these URLs on the machine running the script. For remote access, use an SSH tunnel, for example `ssh -L 3000:127.0.0.1:3000 user@host` for Grafana.
 
@@ -177,21 +177,21 @@ Removing dashboard provisioning and the smoke test does not erase data or dashbo
 CPUS=6 MEMORY=12288 GRAFANA_PORT=3002 bash ./llm-obs-setup.sh
 ```
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `BOOTSTRAP` | `1` | Install missing CLI dependencies; `0` checks existing tools only |
-| `INSTALL_BIN` | `~/.local/bin` | Linux download destination for missing minikube, kubectl, Helm |
-| `PROFILE` | `llm-obs` | minikube profile and kubectl context |
-| `NAMESPACE` | `llm-obs` | Kubernetes namespace |
-| `CPUS` | `4` | minikube CPU allocation |
-| `MEMORY` | `8192` | minikube memory allocation in MiB |
-| `GRAFANA_PORT` | `3000` | Local Grafana port |
-| `OPENLIT_PORT` | `3001` | Local OpenLIT port |
-| `OTLP_GRPC_PORT` | `4317` | Local Collector OTLP gRPC port |
-| `OTLP_HTTP_PORT` | `4318` | Local Collector OTLP HTTP port |
-| `STATE_DIR` | `${XDG_STATE_HOME:-$HOME/.local/state}/llm-obs/$PROFILE` | Generated values, versions, virtual environment, forwarding logs/PIDs |
-| `TIMEOUT` | `15m` | Helm and rollout wait timeout |
-| `RENDER_ONLY` | `0` | Set to `1` to render charts without changing a cluster or installing the SDK |
+| Variable         | Default                                                  | Purpose                                                                      |
+| ---------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `BOOTSTRAP`      | `1`                                                      | Install missing CLI dependencies; `0` checks existing tools only             |
+| `INSTALL_BIN`    | `~/.local/bin`                                           | Linux download destination for missing minikube, kubectl, Helm               |
+| `PROFILE`        | `llm-obs`                                                | minikube profile and kubectl context                                         |
+| `NAMESPACE`      | `llm-obs`                                                | Kubernetes namespace                                                         |
+| `CPUS`           | `4`                                                      | minikube CPU allocation                                                      |
+| `MEMORY`         | `8192`                                                   | minikube memory allocation in MiB                                            |
+| `GRAFANA_PORT`   | `3000`                                                   | Local Grafana port                                                           |
+| `OPENLIT_PORT`   | `3001`                                                   | Local OpenLIT port                                                           |
+| `OTLP_GRPC_PORT` | `4317`                                                   | Local Collector OTLP gRPC port                                               |
+| `OTLP_HTTP_PORT` | `4318`                                                   | Local Collector OTLP HTTP port                                               |
+| `STATE_DIR`      | `${XDG_STATE_HOME:-$HOME/.local/state}/llm-obs/$PROFILE` | Generated values, versions, virtual environment, forwarding logs/PIDs        |
+| `TIMEOUT`        | `15m`                                                    | Helm and rollout wait timeout                                                |
+| `RENDER_ONLY`    | `0`                                                      | Set to `1` to render charts without changing a cluster or installing the SDK |
 
 Preview mode needs Bash, standard utilities, Helm, curl, Python 3.10+, and network access already installed; it never bootstraps packages or CLIs. It updates Helm repository metadata and writes generated files:
 
