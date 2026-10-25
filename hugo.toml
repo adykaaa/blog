@@ -29,8 +29,8 @@ buildFuture = true
 
 [markup]
   [markup.tableOfContents]
-    startLevel = 2
-    endLevel = 4
+    startLevel = 1
+    endLevel = 3
   [markup.highlight]
     style = "dracula"
     lineNos = false

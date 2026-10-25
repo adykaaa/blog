@@ -9,7 +9,7 @@ copyCode: true
 toc: true
 ---
 
-## Intro
+# Intro
 
 In [part 1](https://adykaaa.github.io/blog/llm-platform-engineering-1-inference-overview/) of the series we've gone through the **inference** process on a high level. For a quick refresher:
 
@@ -24,7 +24,7 @@ In this particular article we will go through things such as:
 
 and more. Before we do this though, we'll need to set ourselves up for success.
 
-## Local environment setup
+# Local environment setup
 
 The setup script I'm about to reference assumes that you are:
 
@@ -75,4 +75,4 @@ For stopping the set up cluster you can do `minikube stop --profile llm-obs` and
 
 To **nuke** it out of existence use `minikube delete --profile llm-obs`.
 
-## Model server
+# Model server

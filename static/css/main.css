@@ -382,7 +382,7 @@ img { max-width: 100%; height: auto; display: block; }
   color: var(--text);
 }
 
-.post-content h2 {
+.post-content h1 {
   font-size: 1.45rem;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -390,13 +390,13 @@ img { max-width: 100%; height: auto; display: block; }
   padding-bottom: 0.4em;
   border-bottom: 1px solid var(--border);
 }
-.post-content h3 {
+.post-content h2 {
   font-size: 1.2rem;
   font-weight: 600;
   letter-spacing: -0.01em;
   margin: 2em 0 0.6em;
 }
-.post-content h4 {
+.post-content h3 {
   font-size: 1.05rem;
   font-weight: 600;
   margin: 1.75em 0 0.5em;
@@ -734,4 +734,4 @@ img { max-width: 100%; height: auto; display: block; }
 }
 
 .post-toc li { margin-top: .4rem; }
-.post-content :is(h2, h3, h4) { scroll-margin-top: calc(var(--header-h) + 1rem); }
+.post-content :is(h1, h2, h3) { scroll-margin-top: calc(var(--header-h) + 1rem); }
