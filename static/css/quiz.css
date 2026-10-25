@@ -1,0 +1,156 @@
+.article-quiz {
+  --quiz-success: #166534;
+  --quiz-success-bg: #f0fdf4;
+  --quiz-error: #991b1b;
+  --quiz-error-bg: #fef2f2;
+}
+
+.article-quiz [hidden] { display: none !important; }
+
+.article-quiz .quiz-description {
+  margin-bottom: 0.75rem;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.quiz-form { margin-top: 1.5rem; }
+
+.article-quiz .quiz-progress {
+  margin-bottom: 1.25rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.article-quiz .quiz-message {
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--quiz-error);
+  background: var(--quiz-error-bg);
+  color: var(--quiz-error);
+  font-size: 0.9rem;
+}
+
+.quiz-question {
+  min-width: 0;
+  margin: 1.5rem 0;
+  padding: 0.75rem 1rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  scroll-margin-top: calc(var(--header-h) + 1rem);
+}
+
+.quiz-question legend {
+  max-width: 100%;
+  padding: 0 0.4rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.quiz-number { color: var(--accent); }
+
+.article-quiz .quiz-hint {
+  margin-bottom: 0.75rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.quiz-choices { display: grid; gap: 0.5rem; }
+
+.quiz-choice {
+  display: grid;
+  grid-template-columns: 1.1em minmax(0, 1fr);
+  gap: 0.65rem;
+  align-items: start;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  font-size: 0.85rem;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.quiz-choice:hover { background: var(--bg-secondary); }
+.quiz-choice:has(input:checked) { border-color: var(--accent); background: var(--accent-light); }
+.quiz-choice:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.quiz-choice input {
+  width: 1em;
+  height: 1em;
+  margin-top: 0.32em;
+  accent-color: var(--accent);
+  font: inherit;
+}
+
+.quiz-letter { font-weight: 600; }
+.quiz-choice-note { display: block; font-size: 0.75rem; font-weight: 600; }
+.quiz-choice-note:empty { display: none; }
+
+.quiz-question[data-state="correct"] { border-color: var(--quiz-success); }
+.quiz-question[data-state="incorrect"],
+.quiz-question[data-state="unanswered"] { border-color: var(--quiz-error); }
+
+.quiz-choice.is-correct {
+  border-color: var(--quiz-success);
+  background: var(--quiz-success-bg);
+}
+
+.quiz-choice.is-incorrect {
+  border-color: var(--quiz-error);
+  background: var(--quiz-error-bg);
+}
+
+.is-correct .quiz-choice-note { color: var(--quiz-success); }
+.is-incorrect .quiz-choice-note { color: var(--quiz-error); }
+.quiz-choice:has(input:disabled) { cursor: default; }
+
+.quiz-feedback {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+
+.article-quiz .quiz-feedback p { margin-bottom: 0.5rem; }
+.quiz-question[data-state="correct"] .quiz-outcome { color: var(--quiz-success); }
+.quiz-question[data-state="incorrect"] .quiz-outcome { color: var(--quiz-error); }
+
+.quiz-result {
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-lg);
+  background: var(--accent-light);
+  scroll-margin-top: calc(var(--header-h) + 1rem);
+}
+
+.quiz-result:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.article-quiz .quiz-result p { margin-bottom: 0.75rem; font-size: 0.9rem; }
+.article-quiz .quiz-result .quiz-score { font-size: 1.15rem; font-weight: 700; }
+
+.quiz-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+
+.quiz-button {
+  padding: 0.65rem 1.1rem;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.quiz-button:hover { background: var(--accent-hover); }
+.quiz-button-secondary { background: var(--bg); color: var(--accent); }
+.quiz-button-secondary:hover { background: var(--accent-light); }
+.quiz-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+@media (max-width: 640px) {
+  .quiz-question { padding: 0.6rem 0.65rem 0.75rem; }
+  .quiz-choice { padding: 0.65rem; gap: 0.5rem; }
+  .quiz-result { padding: 0.85rem; }
+}

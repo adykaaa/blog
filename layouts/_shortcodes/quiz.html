@@ -1,0 +1,49 @@
+{{- $id := .Get "id" -}}
+{{- $quiz := index .Site.Data.quizzes $id -}}
+{{- if not $quiz -}}
+  {{- errorf "Quiz %q not found in data/quizzes (%s)" $id .Position -}}
+{{- else -}}
+  {{- $instance := printf "quiz-%s-%d" $id .Ordinal -}}
+  {{- $page := .Page -}}
+  {{- $letters := slice "A" "B" "C" "D" -}}
+<section class="article-quiz" data-quiz aria-label="{{ $quiz.title }}">
+  <p class="quiz-description">{{ len $quiz.questions }} questions to check what stuck. Choose one answer unless the question says “Select all that apply.”</p>
+  <p class="quiz-description">Each question is worth one point. For questions with multiple answers, select every correct option and no incorrect options.</p>
+  <p class="quiz-unavailable">Enable JavaScript to take this quiz.</p>
+  <form class="quiz-form" hidden>
+    <p class="quiz-progress" role="status"></p>
+    <p class="quiz-message" role="alert" hidden></p>
+    <div class="quiz-result" tabindex="-1" hidden>
+      <p class="quiz-score"></p>
+      <p>Review the answers and explanations below, or give it another go.</p>
+      <button class="quiz-button quiz-button-secondary" type="reset" data-quiz-retry hidden>Try again</button>
+    </div>
+    {{ range $questionIndex, $question := $quiz.questions }}
+      {{- $questionID := printf "%s-q%d" $instance (add $questionIndex 1) -}}
+      {{- $correctLetters := slice -}}
+    <fieldset class="quiz-question" aria-describedby="{{ $questionID }}-hint">
+      <legend><span class="quiz-number">{{ add $questionIndex 1 }}.</span> {{ $page.RenderString $question.question }}</legend>
+      <p class="quiz-hint" id="{{ $questionID }}-hint">{{ if $question.multiple }}Select all that apply.{{ else }}Choose one answer.{{ end }}</p>
+      <div class="quiz-choices">
+        {{ range $optionIndex, $option := $question.options }}
+          {{- if $option.correct }}{{ $correctLetters = $correctLetters | append (index $letters $optionIndex) }}{{ end -}}
+        <label class="quiz-choice">
+          <input type="{{ if $question.multiple }}checkbox{{ else }}radio{{ end }}" name="{{ $questionID }}" value="{{ index $letters $optionIndex }}"{{ if $option.correct }} data-correct{{ end }}>
+          <span class="quiz-choice-content"><span class="quiz-letter">{{ index $letters $optionIndex }}.</span> {{ $page.RenderString $option.text }}<span class="quiz-choice-note"></span></span>
+        </label>
+        {{ end }}
+      </div>
+      <div class="quiz-feedback" id="{{ $questionID }}-feedback" hidden>
+        <p><strong class="quiz-outcome"></strong> Correct {{ if $question.multiple }}answers{{ else }}answer{{ end }}: {{ delimit $correctLetters ", " }}.</p>
+        <p>{{ $page.RenderString $question.explanation }}</p>
+        <a href="{{ $question.section }}">Revisit this section ↑</a>
+      </div>
+    </fieldset>
+    {{ end }}
+    <div class="quiz-actions">
+      <button class="quiz-button" type="submit">Check answers</button>
+      <button class="quiz-button quiz-button-secondary" type="reset" data-quiz-retry hidden>Try again</button>
+    </div>
+  </form>
+</section>
+{{- end -}}

@@ -45,3 +45,25 @@ URLs to the new addresses.
 
 Add `toc: true` to an article's front matter to show a linked table of contents
 above its text. It updates automatically when section headings change.
+
+## Article quizzes
+
+Add a quiz at the end of an article with:
+
+```text
+## Test your understanding
+
+{{< quiz id="inference-overview" >}}
+```
+
+Questions live in `data/quizzes/<id>.yaml`. Each quiz has a `title` and a
+`questions` list. Each question defines `question`, four `options` (with `text`
+and `correct: true` on the correct choices), `explanation`, and `section` (a
+heading anchor such as `#prefill`). Set `multiple: true` for questions that
+allow multiple answers. Question text, options, and explanations support inline
+Markdown.
+
+The quiz checks answers in the browser and awards one point per fully correct
+question. Readers must answer every question before submitting. Explanations
+and links back to the article appear after scoring, and **Try again** resets the
+attempt. Quiz CSS and JavaScript load only on pages using the shortcode.

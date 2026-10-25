@@ -1,0 +1,191 @@
+title: "Inference overview quiz"
+questions:
+  - question: "Why are GPUs well suited to LLM inference?"
+    multiple: true
+    options:
+      - text: "They execute many arithmetic operations in parallel."
+        correct: true
+      - text: "Their cores specialize in complex branching and string manipulation."
+      - text: "They provide high memory bandwidth for moving data to computation units."
+        correct: true
+      - text: "They eliminate the need to consider model memory requirements."
+    explanation: "LLMs need both large amounts of matrix arithmetic and fast data movement. GPU memory capacity still matters."
+    section: "#why-are-gpus-all-the-rage-now"
+
+  - question: "What would you primarily find inside the article's `model.safetensors` file?"
+    options:
+      - text: "The conversation history and its KV cache."
+      - text: "Executable code for the model-serving API."
+      - text: "Learned numerical weights stored as tensors."
+        correct: true
+      - text: "A searchable collection of the original training documents."
+    explanation: "Training produces numerical weights. Inference uses those weights to transform inputs into predictions."
+    section: "#inside-the-model-file"
+
+  - question: "A model generates a response using weights already learned during training. What is this process called?"
+    options:
+      - text: "Training."
+      - text: "Inference."
+        correct: true
+      - text: "Tokenization."
+      - text: "Embedding lookup."
+    explanation: "Inference means running the trained model on an input to produce an output."
+    section: "#inference"
+
+  - question: "Which sequence matches the usual input-processing flow described in the article?"
+    options:
+      - text: "Text → GPU tokenization → CPU embedding lookup → transformer layers."
+      - text: "Text → embedding lookup → tokenization → transformer layers."
+      - text: "Text → CPU tokenization → transformer layers → embedding lookup."
+      - text: "Text → CPU tokenization → token IDs transferred to GPU → embedding lookup → transformer layers."
+        correct: true
+    explanation: "Tokenization usually happens on the CPU. The model then looks up token vectors before processing them through its transformer layers."
+    section: "#where-the-cpu-and-gpu-come-in"
+
+  - question: "Which statements describe the model's internal embedding lookup?"
+    multiple: true
+    options:
+      - text: "It trains a new vector for each token whenever a prompt arrives."
+      - text: "It maps each token ID to a vector using a learned table."
+        correct: true
+      - text: "It produces one semantic-search vector for the entire prompt."
+      - text: "Its embedding table is part of the model's learned weights."
+        correct: true
+    explanation: "This is a lookup of learned per-token vectors, rather than training or generating a single search embedding."
+    section: "#from-token-ids-to-embedding-vectors"
+
+  - question: "In the article's simplified example, “bank” starts with the same embedding in “OTP bank” and “river bank.” What allows its representation to become different?"
+    options:
+      - text: "The tokenizer assigns a new token ID after understanding the sentence."
+      - text: "Attention combines information from relevant surrounding tokens."
+        correct: true
+      - text: "The model updates its trained weights for each sentence."
+      - text: "The embedding table contains a separate entry for every possible sentence."
+    explanation: "Attention builds a context-dependent representation. “OTP” and “river” provide different useful context."
+    section: "#attention"
+
+  - question: "Assume each word is one token. When processing “nearest” in “Take me to the nearest OTP bank,” which tokens can causal self-attention use?"
+    options:
+      - text: "Every token, because the complete prompt is available."
+      - text: "Only “Take,” “me,” “to,” and “the.”"
+      - text: "Only “OTP” and “bank.”"
+      - text: "“Take,” “me,” “to,” “the,” and “nearest.”"
+        correct: true
+    explanation: "A position can attend to itself and earlier positions. Future positions remain masked, even during prefill."
+    section: "#causal-self-attention"
+
+  - question: "What does having multiple attention heads allow a layer to do?"
+    options:
+      - text: "Calculate separate attention patterns that can capture different relationships between tokens."
+        correct: true
+      - text: "Assign one complete user request to each head."
+      - text: "Let some heads access future tokens despite the causal mask."
+      - text: "Replace Value vectors with an average of attention scores."
+    explanation: "Heads perform separate attention calculations, and their outputs contribute to the combined attention result."
+    section: "#attention-heads"
+
+  - question: "Which statements correctly describe Q, K, V, and the attention output?"
+    multiple: true
+    options:
+      - text: "A token's Query is compared with the Keys of tokens it can attend to."
+        correct: true
+      - text: "Value vectors determine attention scores by being compared with one another."
+      - text: "Attention weights control how Value vectors are mixed together."
+        correct: true
+      - text: "The output projection transforms the combined head outputs; this is not yet the final generated answer."
+        correct: true
+    explanation: "Q–K comparisons determine relevance, V supplies the information being mixed, and the output projection transforms the combined result."
+    section: "#query-key-value-output-q-k-v-o"
+
+  - question: "Why can prefill process prompt positions in parallel, while ordinary autoregressive decode generates the answer sequentially?"
+    options:
+      - text: "Prefill temporarily disables causal attention."
+      - text: "All prompt tokens are already known, while future answer tokens have not yet been generated."
+        correct: true
+      - text: "Prefill uses multiple GPUs, while decode uses only one."
+      - text: "Decode must tokenize the entire prompt again before every output token."
+    explanation: "Prefill has all input positions available, with causal masking still enforced. During decode, each next-token choice depends on the generated sequence so far."
+    section: "#parallel-processing"
+
+  - question: "An answer starts appearing almost immediately, but then streams painfully slowly. Which metric most directly captures the slow part?"
+    options:
+      - text: "Model parameter count."
+      - text: "Time To First Token — TTFT."
+      - text: "Time Per Output Token — TPOT."
+        correct: true
+      - text: "Prompt token count."
+    explanation: "TPOT describes the time taken for additional output tokens. TTFT measures the initial wait."
+    section: "#tpot"
+
+  - question: "Why does prefill for a sufficiently large prompt tend to be compute-bound, while decode at low batch sizes often faces a memory-bandwidth bottleneck?"
+    options:
+      - text: "Prefill reuses loaded weights across many token calculations; decode does less computation per byte of weights moved."
+        correct: true
+      - text: "Prefill reads weights from GPU memory, while decode reads them from disk."
+      - text: "Decode uses a larger set of model weights than prefill."
+      - text: "Prefill performs attention, while decode performs only token selection."
+    explanation: "Processing many prompt positions provides more computation for each chunk of weight data read. The bottleneck depends on the workload."
+    section: "#decode"
+
+  - question: "Why does the KV cache retain previous tokens' Keys and Values rather than their Queries and Outputs?"
+    options:
+      - text: "Queries and Outputs are stored inside the model's trained weights instead."
+      - text: "Keys and Values require no GPU memory."
+      - text: "Previous Queries and Outputs must change whenever a token is appended."
+      - text: "New tokens use their own Queries to match previous Keys and combine information from previous Values."
+        correct: true
+    explanation: "Earlier K/V tensors remain useful to future attention calculations. Earlier Queries and Outputs are not needed for that reuse."
+    section: "#why-only-k-and-v-cache"
+
+  - question: "With a populated KV cache, what happens when decode processes a newly generated token?"
+    multiple: true
+    options:
+      - text: "The model calculates the token's own Query, Key, and Value."
+        correct: true
+      - text: "Attention reads cached Keys and Values from earlier tokens."
+        correct: true
+      - text: "The token's new Key and Value are added to the cache."
+        correct: true
+      - text: "Attention to earlier tokens becomes unnecessary."
+    explanation: "Caching avoids recalculating previous K/V tensors. The new token still attends to the earlier context."
+    section: "#decode-and-kv-cache"
+
+  - question: "Keeping the model, cache precision, and request count fixed, each active sequence grows from 5,000 to 10,000 cached tokens. What should you expect?"
+    options:
+      - text: "Both model-weight memory and KV-cache memory roughly double."
+      - text: "KV-cache memory roughly doubles, leaving less VRAM available for additional requests."
+        correct: true
+      - text: "KV-cache memory stays constant because earlier tokens are already cached."
+      - text: "KV-cache memory roughly quadruples because attention compares token pairs."
+    explanation: "KV-cache memory grows roughly linearly with cached sequence length. The model weights stay the same, while larger caches reduce the capacity available for concurrency."
+    section: "#but-where-does-the-kv-cache-live"
+
+  - question: "What is the difference between `q_proj.weight` and a token's Query vector?"
+    options:
+      - text: "Both are fixed values loaded directly from the model file."
+      - text: "The projection weights are learned during training; the Query is calculated from the token's current representation during inference."
+        correct: true
+      - text: "The projection weights are learned again for every prompt."
+      - text: "The Query is the token's integer ID before embedding lookup."
+    explanation: "The learned projection matrix transforms a token's current representation into its Query. The same distinction applies to Key and Value projections."
+    section: "#the-projection-weights-inside-the-model"
+
+  - question: "A token has Query `[2, 1]`. Two tokens it can attend to have Keys `[1, 0]` and `[0, 3]`. Using the article's dot-product comparison, which receives the higher raw attention score?"
+    options:
+      - text: "The first token, because its Key starts with a larger number."
+      - text: "The second token: its score is 3, compared with 2 for the first."
+        correct: true
+      - text: "Both receive the same score."
+      - text: "We need their Value vectors to calculate these scores."
+    explanation: "`[2, 1] · [1, 0] = 2`, while `[2, 1] · [0, 3] = 3`. Values supply the information mixed afterward."
+    section: "#comparing-queries-and-keys"
+
+  - question: "One attention head assigns weights of 75% and 25% to Value vectors `[1, 0]` and `[0, 1]`. Which correctly describes the result and the role of `o_proj`?"
+    options:
+      - text: "The head selects `[1, 0]` and discards the other Value; `o_proj` converts it directly into text."
+      - text: "The head produces `[0.5, 0.5]`; `o_proj` stores it in the KV cache."
+      - text: "The head produces `[0.75, 0.25]`; after combining the heads' outputs, `o_proj` transforms the combined result."
+        correct: true
+      - text: "The head produces a token ID; `o_proj` looks up its embedding."
+    explanation: "Attention forms a weighted sum of Values. The output projection operates on the combined head outputs, producing an intermediate representation for further model processing."
+    section: "#mixing-values-and-producing-the-output"
