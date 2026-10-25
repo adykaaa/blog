@@ -34,7 +34,7 @@ The setup script I'm about to reference assumes that you are:
 - have 4 `CPU` cores and 8 `GiB` of RAM available
 - have sudo access
 
-The `01-llm-obs-setup.sh` script installs some CLI tools we'll need (`kubectl`, `helm`, `minikube`) and then it sets up a `minikube` environment that has `Grafana`, `OpenLIT`, `Prometheus`, `OpenTelemetry`, `Tempo` and `Loki` installed (_as minimally as possible_) and connected. These tools are going to be needed to **provide an observable Kubernetes environment**, as everything we'll be doing in future articles will happen inside K8s.
+The `01-llm-obs-setup.sh` script installs some CLI tools we'll need (`kubectl`, `helm`, `minikube`) and then it sets up a `minikube` environment that has `Grafana`, `OpenLIT`, `Prometheus`, `OpenTelemetry`, `Tempo` and `Loki` installed (_as minimally as possible_) and connected (alongside a cool dashboard). These tools are going to be needed to **provide an observable Kubernetes environment**, as everything we'll be doing in future articles will happen inside K8s.
 
 If your machine meets the requirements from above (_if it doesn't don't worry, just reading the article carefully will also do the job_), all you have to do is:
 

@@ -2,7 +2,7 @@
 
 [01-llm-obs-setup.sh](./01-llm-obs-setup.sh) detects Linux or macOS, creates a minikube cluster, and installs OpenTelemetry Collector, OpenLIT Community Edition with ClickHouse, Loki, Tempo, Grafana, and a small Prometheus instance for metrics.
 
-Grafana comes with Loki, Tempo, and Prometheus data sources. **No dashboards or sample telemetry are created.** The script checks service readiness and Grafana HTTP health, without a telemetry smoke test.
+Grafana comes with Loki, Tempo, and Prometheus data sources and a provisioned **LLM Inference · From prompt to token** dashboard, also used as the home dashboard. It covers tokenization, internal embeddings, prefill, decode, KV cache, request pressure, and optional GPU metrics. No model or sample telemetry is installed by setup; measurements appear when you connect workloads.
 
 The script resolves the latest stable application releases and Helm charts and records the selected versions. It installs the OpenLIT Python SDK in an isolated virtual environment. It automatically installs missing CLI prerequisites and reuses installed tools. Docker and Linux NVIDIA drivers/toolkit must be prepared separately. It does not instrument already-running agents.
 
@@ -157,11 +157,12 @@ bash 01-llm-obs-setup.sh
 
 Replace `main` with a commit SHA or release tag to download a fixed script revision. Application/chart versions still resolve dynamically unless overridden.
 
-The script enables storage add-ons, waits for the services, checks Grafana HTTP health, and prints the admin password. On Linux it also enables the NVIDIA device-plugin and waits for an allocatable GPU. Dashboards start empty; telemetry appears when you connect your agents.
+The script enables storage add-ons, waits for the services, checks Grafana HTTP health, and prints the admin password and dashboard URL. On Linux it also enables the NVIDIA device-plugin and waits for an allocatable GPU. The dashboard starts with a guide and signal coverage; charts populate when you connect instrumented workloads.
 
 | Endpoint             | Default URL/address                               |
 | -------------------- | ------------------------------------------------- |
 | Grafana              | http://localhost:3000                             |
+| Inference dashboard  | http://localhost:3000/d/llm-inference              |
 | OpenLIT              | http://localhost:3001 — create your local account |
 | OTLP HTTP            | http://127.0.0.1:4318                             |
 | OTLP gRPC            | 127.0.0.1:4317                                    |
@@ -169,7 +170,7 @@ The script enables storage add-ons, waits for the services, checks Grafana HTTP 
 
 Forwarding binds to `127.0.0.1`; access these URLs on the machine running the script. For remote access, use an SSH tunnel, for example `ssh -L 3000:127.0.0.1:3000 user@host` for Grafana.
 
-Removing dashboard provisioning and the smoke test does not erase data or dashboards from an existing installation. For an entirely fresh installation, use a new `PROFILE`, or explicitly delete the old cluster and its data as described below.
+The provisioned dashboard has a stable UID and is updated on reruns. Save a copy under another name to customize it; edits to the provisioned original are disabled. Existing telemetry and other dashboards are retained. For an entirely fresh installation, use a new `PROFILE`, or explicitly delete the old cluster and its data as described below.
 
 ## Configuration
 
@@ -217,9 +218,86 @@ Set `OTEL_SERVICE_NAME` to distinguish agents. Adjust the environment file path 
 
 Alternatively, install your agent's dependencies into the script-created virtual environment and use the command printed by the script. For containerized Python agents, install `openlit` in the image, use the in-cluster Collector endpoint, and launch with `openlit-instrument python your_agent.py`.
 
-OpenLIT instruments supported frameworks when launched this way; installation alone does not instrument existing processes. The enterprise eBPF controller is disabled. Create your own Grafana dashboards or query the configured data sources in Explore.
+OpenLIT instruments supported frameworks when launched this way; installation alone does not instrument existing processes. The enterprise eBPF controller is disabled. The dashboard's client section queries current OpenLIT `gen_ai.client.operation.duration` and `gen_ai.client.token.usage` histograms exported through the Collector. Engine internals need server metrics or explicit instrumentation as described below.
 
 The Collector reads Kubernetes stdout/stderr from the single minikube node, including on macOS where the node runs inside Docker Desktop. Host processes must explicitly export OTLP logs, for example with an OpenTelemetry logging handler. SDK traces do not automatically capture stdout. Include `trace_id` in structured logs for log-to-trace links.
+
+## Inference dashboard
+
+Open [LLM Inference](http://localhost:3000/d/llm-inference). It is provisioned from the generated `inference-dashboard.yaml` ConfigMap; the readable JSON is also saved in the state directory. Both are generated in preview mode. Setup mounts the dashboard through a Grafana file provider, without a sidecar or remote dashboard download.
+
+The dashboard provides:
+
+- TTFT, TPOT, end-to-end latency, and output throughput at a glance.
+- Scrape health, coverage of each stage, running requests, and queue depth.
+- Tokenization duration and throughput; prompt length percentiles.
+- Internal token embedding lookup duration and throughput.
+- Prefill duration, queue time, prompt throughput, and mean time by server phase.
+- Decode duration, TPOT versus inter-token latency, output length, and finish reasons.
+- Per-replica KV cache occupancy, token-weighted prefix hit rate, and preemptions.
+- Optional NVIDIA DCGM compute utilization and framebuffer memory usage.
+- A separate OpenLIT client view, with links to Tempo traces and Loki logs in Explore.
+
+**Model** and **Engine pod** filter engine metrics. **Model** and **OTLP service** filter explicit stage timers; the client view uses `gen_ai.response.model` and the service filter. GPU and scrape-health panels cover the namespace independently of those filters. Variables use the selected time range so historical workloads remain selectable after removal. The default time range is one hour, refresh is 15 seconds, and Prometheus retains approximately one day of history, subject to its 512 MB storage cap.
+
+### Connect server metrics
+
+Prometheus discovers opted-in **pods in `NAMESPACE` only**, using a service account with namespace-scoped, read-only pod discovery permissions. On a vLLM Deployment, put this under `spec.template` (use the actual model-server port):
+
+```yaml
+metadata:
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: /metrics # optional; /metrics is the default
+spec:
+  containers:
+    - name: model
+      # image, args, resources, etc. belong here
+      ports:
+        - name: metrics
+          containerPort: 8000
+```
+
+The **container port must be named `metrics`**. Only that port is scraped, avoiding duplicate scrapes of multi-port pods. `prometheus.io/port` is not used. For another namespace, add that namespace to discovery and grant the corresponding read permissions. For a host model, configure an explicit reachable scrape target; localhost inside Prometheus refers to its own pod.
+
+The engine queries use native [`vllm:*` metrics](https://docs.vllm.ai/en/latest/usage/metrics/) and `model_name`. Current `kv_cache_usage_perc` and older `gpu_cache_usage_perc` are supported. TPOT uses the request-level histogram; ITL uses `inter_token_latency_seconds`. Older runtimes without those metrics leave the corresponding panels unmeasured. The dashboard does not treat legacy ITL as per-request TPOT.
+
+Other runtimes can expose the same suffixes under `llm_inference_` with the same units/types and `model_name` label. For example, `llm_inference_request_prefill_time_seconds` must be a histogram of actual prefill duration and `llm_inference_kv_cache_usage_perc` a gauge of used cache capacity as a fraction from 0 to 1. Native vLLM series take precedence when both names represent the same series. Histogram queries aggregate bucket rates before computing percentiles; prefix hit rate divides token counter rates. Idle or missing measurements are not filled with zeros.
+
+A DCGM exporter can opt in through the same pod annotation and named port. It must expose `DCGM_FI_DEV_GPU_UTIL` (percent) and `DCGM_FI_DEV_FB_USED` (MiB). Setup does not install a GPU exporter; those panels remain unavailable on macOS or until one is connected.
+
+### Measure tokenization and internal embeddings
+
+Client instrumentation and vLLM's standard metrics do not isolate the tokenizer or the model's input embedding lookup. Setup writes `inference_metrics.py` into `STATE_DIR`. Copy it alongside your model code (or add the state directory to `PYTHONPATH`). Initialize OpenLIT or an OpenTelemetry SDK with an OTLP metric reader and tracer provider, then wrap the actual work:
+
+```python
+import openlit
+from inference_metrics import observe_phase
+
+openlit.init(otlp_endpoint="http://127.0.0.1:4318")
+model_name = "Qwen/Qwen2.5-0.5B-Instruct"
+
+with observe_phase("tokenization", model_name) as measured:
+    inputs = tokenizer(prompt, return_tensors="pt")
+    measured["tokens"] = inputs.input_ids.numel()
+
+# Wrap the input embedding operation inside your model's forward path.
+# This example assumes synchronous CPU execution.
+with observe_phase("embedding", model_name, tokens=inputs.input_ids.numel()):
+    vectors = model.get_input_embeddings()(inputs.input_ids)
+```
+
+For containerized models, use `http://otel.<namespace>.svc.cluster.local:4318`. Set `OTEL_SERVICE_NAME` to select the workload in the dashboard. The helper uses the configured global SDK; it does not install a second exporter or initialize OpenLIT on import. It creates child spans as well as these metrics, translated by the Collector into:
+
+| Prometheus metric | Type / labels | Meaning |
+| --- | --- | --- |
+| `llm_inference_stage_duration_seconds` | Histogram / `stage`, `model_name` | Measured execution time; stages are `tokenization` and `embedding` |
+| `llm_inference_stage_tokens_total` | Counter / `stage`, `model_name` | Actual token IDs or token vectors processed |
+| `llm_inference_stage_errors_total` | Counter / `stage`, `model_name` | Exceptions raised within an observed phase |
+
+Resource conversion adds `service_name`. Keep model/service labels bounded; never use prompt text or request IDs as metric labels. For CUDA, synchronize before and after a timed region, or use CUDA events and call `record_phase(stage, model_name, seconds, tokens)` with the completed event's elapsed time converted to seconds. Synchronization changes performance and is best reserved for focused profiling. Unsynchronized host timing measures kernel dispatch, not GPU execution.
+
+Embedding work can already be included in prefill/decode durations, so those timers must not be added together. A semantic-search embedding API call is a separate operation from the internal token lookup shown here. TTFT includes queueing and other overhead; it is not pure prefill. TPOT and ITL have different sampling weights. Cache block occupancy is not total VRAM usage, and output token throughput is not memory bandwidth.
 
 ## Troubleshooting and lifecycle
 
