@@ -21,6 +21,7 @@ aliases:
         "/blog/llm-platform-engineering-basics/",
     ]
 wideCode: true
+copyCode: true
 toc: true
 ---
 

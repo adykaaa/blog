@@ -12,6 +12,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ "css/main.css" | absURL }}?v={{ readFile "static/css/main.css" | md5 }}">
+{{ if .Params.copyCode }}
+<script src="{{ "js/copy-code.js" | absURL }}?v={{ readFile "static/js/copy-code.js" | md5 }}" defer></script>
+{{ end }}
 {{ if .HasShortcode "quiz" }}
 <link rel="stylesheet" href="{{ "css/quiz.css" | absURL }}?v={{ readFile "static/css/quiz.css" | md5 }}">
 <script src="{{ "js/quiz.js" | absURL }}?v={{ readFile "static/js/quiz.js" | md5 }}" defer></script>

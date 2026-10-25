@@ -52,6 +52,12 @@ URLs to the new addresses.
 Add `toc: true` to an article's front matter to show a linked table of contents
 above its text. It updates automatically when section headings change.
 
+## Code copy buttons
+
+To add a **Copy** button to `bash`, `python`, `yaml`, and `json` code blocks in an
+article, set `copyCode: true` in its front matter. Readers get confirmation after
+copying the code. Other blocks, including `text`, do not get a button.
+
 ## Article quizzes
 
 Add a quiz at the end of an article with:

@@ -5,6 +5,7 @@ description: "The second part of my LLM Inference Platform Engineering series, w
 tags: ["LLM", "Grafana", "OpenLIT", "Tempo", "Dashboards"]
 draft: true
 wideCode: true
+copyCode: true
 toc: true
 ---
 
@@ -30,7 +31,7 @@ The setup script I'm about to reference assumes that you are:
 - running this from a **Linux** distro (WSL2 also works)
 - have **Docker** installed AND running on your machine
 - have an **NVIDIA** GPU in your machine with drivers and the container toolkit installed
-- have 4 `CPU` cores and 8`GiB` of RAM available
+- have 4 `CPU` cores and 8 `GiB` of RAM available
 - have sudo access
 
 The `01-llm-obs-setup.sh` script installs some CLI tools we'll need (`kubectl`, `helm`, `minikube`) and then it sets up a `minikube` environment that has `Grafana`, `OpenLIT`, `Prometheus`, `OpenTelemetry`, `Tempo` and `Loki` installed (_as minimally as possible_) and connected. These tools are going to be needed to **provide an observable Kubernetes environment**, as everything we'll be doing in future articles will happen inside K8s.
@@ -60,9 +61,9 @@ Stop the sandbox: minikube stop --profile llm-obs
 Delete the sandbox AND its stored data: minikube delete --profile llm-obs
 ```
 
-To double check whether everything is setup as it should be, we can head over to localhost:3000 and log into `Grafana` using the username `admin` and the printed admin password. Then go into `Connections -> View Configured Data Sources` and all 3 of these should be set up:
+To double check whether everything is setup as it should be, we can head over to `http://localhost:3000` and log into `Grafana` using the username `admin` and the printed admin password. Then go into `Connections -> View Configured Data Sources` and all 3 of these should be set up:
 
-![Grafana](../../static/images/llm-platform-2-running-llm-locally/grafana-data-sources.png)
+![Grafana](../../static/images/llm-platform-engineering-2-running-llm-locally/grafana-data-sources.png)
 
 and also check whether you have any PODs that are not in a Running state:
 

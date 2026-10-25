@@ -516,6 +516,50 @@ img { max-width: 100%; height: auto; display: block; }
   }
 }
 
+/* Copy controls for articles with copyCode enabled. */
+.post-content .code-example {
+  margin: 1.75em 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  background: #282a36;
+}
+.post-content .code-example .highlight,
+.post-content .code-example pre {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+.code-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 12px;
+  border-bottom: 1px solid #44475a;
+}
+.code-copy-button {
+  min-width: 5.5em;
+  padding: 4px 10px;
+  border: 1px solid #6272a4;
+  border-radius: var(--radius);
+  background: #282a36;
+  color: #f8f8f2;
+  font: 500 0.75rem var(--font-sans);
+  cursor: pointer;
+}
+.code-copy-button:hover { background: #44475a; }
+.code-copy-button:focus-visible {
+  outline: 2px solid #8be9fd;
+  outline-offset: 2px;
+}
+.code-copy-button:disabled { cursor: wait; }
+.code-copy-fallback {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+}
+
 /* Tables */
 .post-content table {
   width: 100%;
