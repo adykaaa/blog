@@ -5,8 +5,14 @@ Personal site built with [Hugo](https://gohugo.io), hosted on GitHub Pages.
 ## Local development
 
 ```bash
-hugo server -D
+make preview
 ```
+
+This starts Hugo with drafts and live reload enabled. Use `make serve` to
+preview without drafts, `make build` to build the minified site in `public/`,
+and `make drafts` to list draft content. Run `make help` for all commands.
+Override the local port with `make preview PORT=1314` or pass extra Hugo flags
+with `HUGO_ARGS="..."`.
 
 ## Editing in Obsidian
 
@@ -27,7 +33,7 @@ and set the attachment folder to `static/images` to keep new images compatible.
 ## New post
 
 ```bash
-hugo new content blog/my-post-title.md
+make new POST=my-post-title
 ```
 
 Set `draft: false` when ready to publish, then push to `main`.
