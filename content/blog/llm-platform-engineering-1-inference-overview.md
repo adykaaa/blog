@@ -878,7 +878,7 @@ The model then adds `thing`'s own `K`s and `V`s, and this is repeated until the 
 
 ![Decode KV-cache](../../static/images/llm-platform-engineering-overview/decode-kv-cache.png)
 
-#### But where does the KV Cache live?
+### But where does the KV Cache live?
 
 The cache lives in the `VRAM` of our **GPU**, alongside the **model**. The reason for this is simple: accessing the cache needs to be super fast, and should not go through unnecessary networking hops... if we had to add a networking hop or two to every KV cache access, decode would be painfully slow.
 
