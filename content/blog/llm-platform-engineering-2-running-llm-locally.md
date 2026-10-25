@@ -65,10 +65,14 @@ To double check whether everything is setup as it should be, we can head over to
 
 ![Grafana](../../static/images/llm-platform-engineering-2-running-llm-locally/grafana-data-sources.png)
 
-and also check whether you have any PODs that are not in a Running state:
+and also make sure you have no PODs that are not in a `Running` state:
 
 ```bash
  kubectl --context llm-obs get pods --all-namespaces --field-selector=status.phase!=Running
 ```
 
-For stopping the setup cluster you can do `minikube stop --profile llm-obs` and to start it again: `minikube start --profile llm-obs`. To **nuke** it out existence use `minikube delete --profile llm-obs`.
+For stopping the set up cluster you can do `minikube stop --profile llm-obs` and to start it again: `minikube start --profile llm-obs` (_wait a few mins so all PODs come up healthy_).
+
+To **nuke** it out existence use `minikube delete --profile llm-obs`.
+
+## Model server
