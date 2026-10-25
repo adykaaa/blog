@@ -73,6 +73,6 @@ and also make sure you have no PODs that are not in a `Running` state:
 
 For stopping the set up cluster you can do `minikube stop --profile llm-obs` and to start it again: `minikube start --profile llm-obs` (_wait a few mins so all PODs come up healthy_).
 
-To **nuke** it out existence use `minikube delete --profile llm-obs`.
+To **nuke** it out of existence use `minikube delete --profile llm-obs`.
 
 ## Model server
