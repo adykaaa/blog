@@ -70,3 +70,5 @@ and also check whether you have any PODs that are not in a Running state:
 ```bash
  kubectl --context llm-obs get pods --all-namespaces --field-selector=status.phase!=Running
 ```
+
+For stopping the setup cluster you can do `minikube stop --profile llm-obs` and to start it again: `minikube start --profile llm-obs`. To **nuke** it out existence use `minikube delete --profile llm-obs`.
