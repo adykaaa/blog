@@ -61,4 +61,11 @@ Delete the sandbox AND its stored data: minikube delete --profile llm-obs
 ```
 
 To double check whether everything is setup as it should be, we can head over to localhost:3000 and log into `Grafana` using the username `admin` and the printed admin password. Then go into `Connections -> View Configured Data Sources` and all 3 of these should be set up:
+
 ![Grafana](../../static/images/llm-platform-2-running-llm-locally/grafana-data-sources.png)
+
+and also check whether you have any PODs that are not in a Running state:
+
+```bash
+ kubectl --context llm-obs get pods --all-namespaces --field-selector=status.phase!=Running
+```
