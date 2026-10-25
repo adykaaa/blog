@@ -338,6 +338,8 @@ presets:
     includeCollectorLogs: false
   kubernetesAttributes:
     enabled: true
+  kubeletMetrics:
+    enabled: true
 ports:
   jaeger-compact: {enabled: false}
   jaeger-thrift: {enabled: false}
@@ -354,6 +356,14 @@ alternateConfig:
   extensions:
     health_check: {endpoint: "0.0.0.0:13133"}
   receivers:
+    kubeletstats:
+      collection_interval: 15s
+      auth_type: serviceAccount
+      endpoint: "${env:OTEL_K8S_NODE_IP}:10250"
+      insecure_skip_verify: true # Local minikube kubelet uses a self-signed cert.
+      metric_groups: [pod]
+      metrics:
+        k8s.pod.cpu.usage: {enabled: true}
     otlp:
       protocols:
         grpc: {endpoint: "0.0.0.0:4317"}
@@ -578,9 +588,10 @@ datasources:
           nodeGraph: {enabled: true}
 EOF
 # Keep dashboard generation inline so downloading this script alone still works.
-python3 - "$STATE_DIR" <<'PYDASHBOARD'
+python3 - "$STATE_DIR" "$NAMESPACE" <<'PYDASHBOARD'
 import json, pathlib, sys
 state = pathlib.Path(sys.argv[1])
+namespace = sys.argv[2]
 ds = {'type': 'prometheus', 'uid': 'prometheus'}
 panels = []
 y = 0
@@ -597,6 +608,10 @@ def rate(name, extra=''):
     labels = engine_filter + (',' + extra if extra else '')
     return (f'(rate(vllm:{name}{{{labels}}}[$__rate_interval]) or '
             f'rate(llm_inference_{name}{{{labels}}}[$__rate_interval]))')
+
+def history(name, labels=engine_filter):
+    return (f'(last_over_time(vllm:{name}{{{labels}}}[$__range]) or '
+            f'last_over_time(llm_inference_{name}{{{labels}}}[$__range]))')
 
 def quantile(name, q=.95):
     return f'histogram_quantile({q}, sum by (le,model_name) ({rate(name + "_bucket")}))'
@@ -631,14 +646,83 @@ def add(title, queries=(), unit='short', description='', kind='timeseries', x=0,
     panels.append(p)
     return p
 
+article_url = 'https://adykaaa.github.io/blog/llm-platform-engineering-1-inference-overview/'
+section_guides = {
+    '00': ('Reading the request path', 'inference', '''### Follow one request through the system
+Inference runs learned model weights to predict output tokens. The request passes through tokenization, embedding lookup, prefill and repeated decode steps, while the KV cache preserves reusable attention state. A slow answer can come from any of these stages or from queueing and transport.
+
+**Read latency together with workload.** Prompt length, generated length, request rate and concurrency change the amount of work. Compare p50 (typical), p95 and p99 (tail); histogram percentiles are estimates and cannot be added to reconstruct a request. Use a trace for the timing breakdown of one request.
+
+**Check coverage first.** A successful scrape proves an endpoint is reachable. Empty phase charts indicate missing measurements or no observations in that window; they do not demonstrate zero-cost inference.'''),
+    '01': ('Tokenization and CPU work', 'tokenization-and-embeddings', '''### Turn text into token IDs
+The article's `Hello, how are you?` example becomes six token IDs. A token can be a word fragment, punctuation or whitespace-related unit. Token counts therefore describe model work more accurately than word counts.
+
+Tokenizers usually perform CPU work: string processing, branching and vocabulary lookups. Longer prompts can increase tokenizer time before GPU execution begins. Compare tokenizer latency and tokenized tokens/s with the CPU tile to spot possible contention; CPU activity also includes HTTP handling, scheduling and other processes.
+
+**CPU scope:** the tile and CPU history follow the Pod filter. All includes the sandbox namespace's observability pods. Model and Service do not filter CPU. One core is one fully busy logical CPU; it is not a percentage of a pod's CPU limit.'''),
+    '02': ('Embedding lookup and model weights', 'tokenization-and-embeddings', '''### Look up learned vectors before attention
+Each token ID selects a row in the model's learned input embedding table. Qwen2.5-0.5B uses 896-dimensional vectors. The article's `151,936 × 896 × 2 bytes` example requires about 260 MiB for this table at two bytes per parameter. It is part of model weights, not per-request KV storage.
+
+The same token starts with the same input embedding; attention and the Q/K/V projections then build context-dependent representations. Here we measure that internal lookup, separate from semantic-search embedding APIs.
+
+**Read timings carefully.** The lookup can already be included in prefill/decode timings, so do not add it again. GPU wall timers need completed CUDA work to measure execution. A missing explicit timer means the lookup has not been measured separately.'''),
+    '03': ('Prefill and the first-token wait', 'prefill', '''### Process the known context and populate the cache
+During prefill, prompt positions are already known and much of their work can run in parallel while causal attention still restricts each position to itself and earlier tokens. The model computes attention state, fills K/V storage, and produces the first output token. Reusing weights across many positions often makes prefill compute-bound.
+
+**TTFT covers more than pure prefill.** Tokenization, scheduling, queueing and transport can contribute, depending on the measurement boundary. Compare prompt length, uncached KV tokens, queue time and prefill duration before blaming GPU compute.
+
+A prefix hit can reduce actual prefill work even when the full prompt length stays the same. Tokens per engine iteration reveals scheduled work and batching, including mixed prefill/decode iterations; it is not a request batch-size count.'''),
+    '04': ('Decode and streaming speed', 'decode', '''### Generate subsequent tokens autoregressively
+The next token depends on prior output. Each decode step processes new input state, reads previous K/V entries and extends the cache. Weight and context reads recur with less weight reuse per position than in a large prefill batch, so memory bandwidth often matters. Larger batches and workload shape can change the limiting resource.
+
+The article's **50 ms per output token ≈ 20 tokens/s** describes one stream after its first token. Fleet token throughput combines concurrent streams and cannot be read as per-user speed. Longer outputs also increase total decode duration without necessarily increasing per-token latency.
+
+Compare TPOT, inter-token latency, output length and length-limited finishes. TPOT is sampled per request; ITL is sampled per output event, and one event can contain multiple tokens. Use the client section to see delivery cadence experienced across the network.'''),
+    '05': ('Why cache only keys and values?', 'kv-cache', '''### Preserve attention state instead of recomputing the past
+The current Query describes information the new token seeks. Prior Keys are matched against it, and prior Values carry the information mixed by attention. Future tokens reuse those earlier K/V vectors; they do not need earlier Queries or attention Outputs. The cache stores K and V for each relevant layer and token position.
+
+Prefill populates the prompt state. Decode reads that state and adds newly processed positions. Longer contexts and more concurrent sequences consume more cache capacity and increase attention memory traffic. Prefix sharing can reduce duplicate work when matching token prefixes remain reusable.
+
+Use occupancy/headroom for pressure, hit and miss token rates for reuse, preemptions for interrupted work, and optional block lifetime/idle/reuse-gap histograms for eviction behavior. These metrics expose cache behavior and configuration; they do not display the numerical K/V tensors.'''),
+    '06': ('Compute, capacity and memory bandwidth', 'cores-and-memory-bandwidth', '''### Keep the GPU's three constraints separate
+The article distinguishes arithmetic throughput, VRAM capacity and memory bandwidth. Weights must fit, and active requests need room for K/V state and other runtime tensors. A large prefill can reuse weights across many positions; decode repeatedly accesses weights and an expanding context.
+
+**Utilization does not measure TFLOPS.** A busy GPU can still spend time waiting on memory. Used/free framebuffer counters describe capacity, while DRAM activity describes the fraction of cycles with memory-interface traffic, not actual GB/s. Correlate these with prefill, TPOT, context length and batching.
+
+These panels require an annotated NVIDIA DCGM exporter; profiling fields also depend on GPU support and exporter configuration. All hardware charts cover the sandbox namespace independently of model selection. Missing exporter data means unmeasured hardware signals.'''),
+    '07': ('What the user actually waits for', 'inference', '''### Compare server execution with client experience
+A long first-token wait feels like a frozen request; slow follow-up delivery feels like hesitant generation. The server panels explain inference work, while client operation duration and streaming chunk timings include transport, buffering and provider/client overhead.
+
+Client time to first chunk is an end-user observation, distinct from the engine's own TTFT boundary. Gaps between delivered chunks can differ from TPOT because chunks can bundle tokens or arrive in bursts. Streaming metrics appear only when streaming calls are instrumented.
+
+Client and engine token measurements describe different observation points. Keep them separate when estimating workload; adding them would count the same inference twice. Use a correlated Tempo trace and Loki logs to investigate an individual outlier.'''),
+}
+section_context = {
+    '00': 'Inference predicts tokens using fixed learned weights. Request length, output length, queueing and concurrency all affect observed latency; inspect them together.',
+    '01': 'Tokenization usually runs on the CPU and converts text into token IDs. Rising latency can reflect longer inputs or CPU contention; whole-pod CPU also includes scheduling and HTTP work.',
+    '02': 'Internal embeddings are learned weight-table lookups. They feed attention, which builds context-dependent Q/K/V representations. Lookup timing can overlap full prefill/decode accounting.',
+    '03': 'Prefill processes uncached input context, populates K/V state and produces the first output token. It often benefits from GPU compute parallelism; TTFT also includes waiting and other overhead.',
+    '04': 'Decode generates tokens sequentially while reading existing K/V state. Context length, batching and memory bandwidth affect per-token speed; output length affects total duration.',
+    '05': 'K/V state trades repeated computation for memory capacity and traffic. More context and concurrency increase demand; matching retained prefixes can be reused across requests.',
+    '06': 'GPU compute, capacity and bandwidth are distinct limits. Activity ratios and VRAM counters are evidence to correlate with latency, not standalone proof of a bottleneck.',
+    '07': 'Client observations include network and delivery behavior. Streaming chunk cadence and server token timing have different measurement boundaries.',
+}
+
 def row(title):
     global y
     panels.append({'id': len(panels)+1, 'title': title, 'type': 'row', 'collapsed': False,
                    'gridPos': {'x': 0, 'y': y, 'w': 24, 'h': 1}, 'panels': []})
     y += 1
+    section = section_guides[title[:2]]
+    guide(section[0], section[2] + '\n\n[Read Part 1 · ' + section[0] + '](' + article_url + '#' + section[1] + ')', h=10)
+
+def guide(title, content, h=6):
+    global y
+    add(title, kind='text', w=24, h=h, content=content)
+    y += h
 
 add('Inference, from prompt to output', kind='text', w=24, h=6, content='''### Tokenize → Embed → Prefill → Decode ↔ KV cache
-**Start with the latency cards, then follow the numbered stages.** Use Model / Pod for engine metrics and Service for explicit stage timers and client telemetry. GPU panels cover the namespace, independently of model selection.
+**Start with the latency cards, then follow the numbered stages.** Use Model / Pod for engine metrics and Service for explicit stage timers and client telemetry. CPU follows the Pod filter (All = the sandbox namespace), independently of Model / Service. GPU and scrape-health panels cover the namespace.
 
 **No telemetry means unmeasured, never zero.** This setup does not install a model. Connect a vLLM `/metrics` endpoint (annotated pod, named `metrics` port) and use `inference_metrics.py` for tokenization / internal embedding timing. Client OpenLIT data is shown separately below. After removing a workload, select its historical model/pod and a time range containing its requests.''')
 y += 6
@@ -666,7 +750,19 @@ add('Running & waiting requests', [('{{model_name}} · running', f'sum by (model
     ('{{model_name}} · waiting', f'sum by (model_name) ({metric("num_requests_waiting")})')],
     description='A growing queue with saturated KV cache suggests capacity pressure. Check prompt lengths and prefill latency as well.', x=12)
 y += 8
+add('End-to-end latency · typical & tail', [(f'{{{{model_name}}}} · p{int(q*100)}', quantile('e2e_request_latency_seconds', q)) for q in (.5, .95, .99)],
+    's', 'Server request arrival to final token. Compare typical p50 and tail p95/p99 to see whether a small fraction of requests is much slower. These are request-weighted histogram estimates; low-traffic tails can be unstable.')
+add('Waiting requests · by replica', [('{{model_name}} · {{pod}}', f'sum by (model_name,pod) ({metric("num_requests_waiting")})')],
+    description='Per-replica waiting requests. A growing queue on one pod with idle peers suggests routing or cache-locality imbalance. Widespread queue growth points toward demand, scheduling, or capacity limits.', x=12)
+y += 8
 row('01 / Tokenization · CPU text → token IDs')
+cpu = f'k8s_pod_cpu_usage{{job="agents",k8s_namespace_name="{namespace}",k8s_pod_name=~"${{pod:regex}}"}}'
+add('CPU usage · selected pods', [('CPU cores', f'sum({cpu})')], 'suffix: cores',
+    'Kubelet-measured CPU usage summed over the selected pods. 1 core means one fully busy logical CPU; 0.25 means a quarter of a core. Pod=All includes every pod in the sandbox namespace, including observability services. Model and Service do not filter this tile. This measures the whole pod, including HTTP handling, scheduling and other work; correlate it with tokenization duration to investigate CPU contention.',
+    kind='stat', w=8, h=5)
+add('CPU usage · by pod', [('{{k8s_pod_name}}', f'sum by (k8s_pod_name) ({cpu})')], 'suffix: cores',
+    'Per-pod CPU usage from the kubelet, including all processes and containers in each pod. Uses the Pod filter, independently of Model / Service. Compare imbalance between replicas and spikes alongside tokenizer duration; CPU activity alone does not identify tokenization as the cause.', x=8, w=16, h=5)
+y += 5
 add('Tokenization duration', [(f'{{{{model_name}}}} · p{int(q*100)}', stage_quantile('tokenization', q)) for q in (.5, .95, .99)], 's',
     'Explicit tokenization timer. Prompt-token counts alone cannot measure tokenizer latency. Use the supplied observe_phase helper around tokenizer calls.')
 add('Tokenizer throughput', [('{{model_name}} · tokenized tokens/s', f'sum by (model_name) ({stage_rate("tokens_total", "tokenization")})')],
@@ -694,6 +790,9 @@ add('Prompt tokens processed / second', [('{{model_name}}', f'sum by (model_name
 add('Mean server time by phase', [('{{model_name}} · '+label, mean(name)) for label, name in [('queue','request_queue_time_seconds'), ('prefill','request_prefill_time_seconds'), ('decode','request_decode_time_seconds')]],
     's', 'Means by server phase. Interpret alongside request lengths and concurrency; this is not a breakdown of individual requests.', x=12)
 y += 8
+add('Tokens per engine iteration', [('{{model_name}} · p50', quantile('iteration_tokens_total', .5)), ('{{model_name}} · p95', quantile('iteration_tokens_total'))],
+    description='Tokens scheduled in one engine step, from vLLM\'s iteration_tokens_total histogram (despite its name, it is not a counter). It can mix chunked prefill and decode work. Larger values can come from long prompts or more batched requests; this is not a count of concurrent requests.', w=24)
+y += 8
 row('04 / Decode · sequential output generation')
 add('TPOT vs inter-token latency · p95', [('{{model_name}} · TPOT', quantile('request_time_per_output_token_seconds')), ('{{model_name}} · ITL', quantile('inter_token_latency_seconds'))],
     's', 'TPOT is one sample per request; ITL is one per streamed output step. They can differ when outputs bundle tokens. Older vLLM ITL names are not silently relabeled as TPOT.')
@@ -705,29 +804,92 @@ add('Generated length', [('{{model_name}} · p50', quantile('request_generation_
 add('Completion rate by finish reason', [('{{model_name}} · {{finished_reason}}', f'sum by (model_name,finished_reason) ({rate("request_success_total")})')],
     'reqps', 'Finish reasons vary by runtime. Length-limited completions may indicate a small output cap; this metric is not a complete HTTP error rate.', x=12)
 y += 8
+length_limited_rate = rate('request_success_total', 'finished_reason="length"')
+add('Length-limited completions · fraction', [('{{model_name}}', f'sum by (model_name) ({length_limited_rate}) / sum by (model_name) ({rate("request_success_total")})')],
+    'percentunit', 'Share of completed requests ending with the runtime length finish reason. This can indicate a requested output cap or context limit; it does not by itself show poor answer quality. Inspect requested caps, generated lengths and full request traces.')
+add('Requested output token cap · p95', [('{{model_name}}', quantile('request_params_max_tokens'))],
+    description='Requested max_tokens histogram when exported by the runtime. Compare with generated length and the length finish reason to identify truncation. It is a request setting, not generated output or the model context-window limit.', x=12)
+y += 8
 row('05 / KV cache · capacity, reuse & preemption')
 cache = f'({metric("kv_cache_usage_perc")} or {metric("gpu_cache_usage_perc")})'
+hit_rate = f'sum by (model_name) ({rate("prefix_cache_hits_total")}) / sum by (model_name) ({rate("prefix_cache_queries_total")})'
+for x, title, expr, unit, description in [
+    (0, 'KV occupancy · busiest engine', f'max({cache})', 'percentunit', 'Highest active block occupancy among selected replicas and engines. A hot engine can fill up even while the fleet average is low.'),
+    (6, 'KV headroom · tightest engine', f'1 - max({cache})', 'percentunit', 'One minus the highest active occupancy. This is available block fraction under the runtime occupancy accounting, not free GPU bytes or a guaranteed number of additional requests.'),
+    (12, 'Prefix reuse · recent window', f'sum({rate("prefix_cache_hits_total")}) / sum({rate("prefix_cache_queries_total")})', 'percentunit', 'Cached prompt tokens divided by queried prompt tokens in the rate window. Token-weighted across selected engines. No queries means an undefined ratio, not a zero-percent hit rate.'),
+    (18, 'Preemptions · selected interval', f'sum(increase(vllm:num_preemptions_total{{{engine_filter}}}[$__range]) or increase(llm_inference_num_preemptions_total{{{engine_filter}}}[$__range]))', 'short', 'Counter-reset-aware estimate of preemptions in the selected dashboard interval. One request may be preempted multiple times; this is not a failed-request count.'),
+]:
+    card = add(title, [('Selected engines', expr)], unit, description, kind='stat', x=x, w=6, h=4)
+    if unit == 'percentunit':
+        card['fieldConfig']['defaults']['max'] = 1
+    if x in (0, 6):
+        steps = ([{'color': 'green', 'value': None}, {'color': 'yellow', 'value': .8}, {'color': 'red', 'value': .95}]
+                 if x == 0 else [{'color': 'red', 'value': None}, {'color': 'yellow', 'value': .05}, {'color': 'green', 'value': .2}])
+        card['fieldConfig']['defaults'].update({'color': {'mode': 'thresholds'}, 'thresholds': {'mode': 'absolute', 'steps': steps}})
+y += 4
 p = add('KV cache occupancy · per replica', [('{{model_name}} · {{pod}} · engine {{engine}}', cache)],
     'percentunit', 'Fraction of allocated cache blocks in use (0–1), not total GPU VRAM usage. Per-replica values expose hot spots that a fleet average hides.')
 p['fieldConfig']['defaults'].update({'max': 1, 'thresholds': {'mode': 'absolute', 'steps': [{'color':'green','value':None}, {'color':'yellow','value':.8}, {'color':'red','value':.95}]}})
-add('Prefix cache hit fraction', [('{{model_name}}', f'sum by (model_name) ({rate("prefix_cache_hits_total")}) / sum by (model_name) ({rate("prefix_cache_queries_total")})')],
+add('Prefix cache hit fraction', [('{{model_name}}', hit_rate)],
     'percentunit', 'Token-weighted hits / queried tokens. Idle windows have no defined ratio. Low reuse plus long prompts increases prefill work.', x=12)
 y += 8
 add('Preemptions / second', [('{{model_name}}', f'sum by (model_name) ({rate("num_preemptions_total")})')],
     'ops', 'Preemptions can force recomputation. Correlate spikes with cache occupancy, waiting requests, and TTFT.')
-add('KV cache diagnostic guide', kind='text', x=12, h=8, content='''### Read the signals together
+add('Prefix cache throughput · hits & misses', [
+    ('{{model_name}} · reused tokens/s', f'sum by (model_name) ({rate("prefix_cache_hits_total")})'),
+    ('{{model_name}} · missed tokens/s', f'clamp_min(sum by (model_name) ({rate("prefix_cache_queries_total")}) - sum by (model_name) ({rate("prefix_cache_hits_total")}), 0)'),
+], 'tps', 'Token rates from prefix-cache queries: hits are reused tokens, misses are queried minus hit tokens (clamped at zero for rate-window artifacts). These counters describe cache lookups, not decode-generated tokens. A high hit ratio at tiny traffic volume can save less work than a moderate ratio under heavy traffic.', x=12)
+y += 8
+add('New KV tokens computed per prefill', [
+    ('{{model_name}} · p50', quantile('request_prefill_kv_computed_tokens', .5)),
+    ('{{model_name}} · p95', quantile('request_prefill_kv_computed_tokens')),
+], description='Actual new KV token positions computed per prefill, excluding cached tokens, when the runtime exports this histogram. Compare with prompt length: lower computed-token counts for similar prompts indicate useful prefix reuse. This metric is optional and unavailable in some older vLLM versions.')
+add('KV block residency & reuse gaps · p95', [
+    ('{{model_name}} · lifetime', quantile('kv_block_lifetime_seconds')),
+    ('{{model_name}} · idle before eviction', quantile('kv_block_idle_before_evict_seconds')),
+    ('{{model_name}} · gap between reuses', quantile('kv_block_reuse_gap_seconds')),
+], 's', 'Sampled block lifecycle histograms: lifetime runs from allocation to eviction; idle time runs from last access to eviction; reuse gap measures time between accesses. Requires a runtime supporting --kv-cache-metrics. Histograms may stay empty until sampled blocks are reused or evicted. These are separate distributions; do not subtract their percentiles.', x=12)
+y += 8
+config_labels = 'pod=~"${pod:regex}"'
+# vLLM cache_config_info has no model_name label. Attach it from the matching
+# engine inventory, using a presence gauge so idle (zero-running) engines match.
+config_inventory = f'group by (pod,engine,model_name) ({history("num_requests_running")})'
+config_expr = f'{history("cache_config_info", config_labels)} * on (pod,engine) group_left (model_name) {config_inventory}'
+config = add('KV cache configuration · reported by runtime', [('Cache configuration', config_expr)],
+    description='Latest cache configuration seen in the selected interval. Values are labels reported by each runtime, not measurements inferred from GPU memory usage. GPU memory utilization is a configured budget fraction. KV memory bytes is a requested budget when present; it is not live used bytes. Block/head layouts and capacity accounting vary by model and backend.', kind='table', w=24, h=7)
+config['targets'][0].update({'instant': True, 'range': False, 'format': 'table'})
+fields = {'model_name': 'Model', 'pod': 'Pod', 'engine': 'Engine', 'block_size': 'Tokens / block',
+          'num_gpu_blocks': 'GPU blocks', 'cache_dtype': 'KV dtype', 'enable_prefix_caching': 'Prefix caching',
+          'kv_cache_memory_bytes': 'KV budget', 'gpu_memory_utilization': 'GPU budget'}
+config['transformations'] = [{'id': 'organize', 'options': {'includeByName': {key: True for key in fields},
+    'indexByName': {key: i for i, key in enumerate(fields)}, 'renameByName': fields}}]
+config['options'] = {'showHeader': True, 'cellHeight': 'sm'}
+config['fieldConfig']['defaults']['unit'] = 'none'
+config['fieldConfig']['overrides'] = [
+    {'matcher': {'id': 'byName', 'options': 'KV budget'}, 'properties': [{'id': 'unit', 'value': 'bytes'}]},
+    {'matcher': {'id': 'byName', 'options': 'GPU budget'}, 'properties': [{'id': 'unit', 'value': 'percentunit'}]},
+]
+y += 7
+add('KV cache diagnostic guide', kind='text', w=24, h=11, content='''### Read the signals together
 - **High occupancy + queue growth:** KV capacity may limit concurrency.
 - **Preemptions + TTFT spikes:** requests may be recomputing evicted state.
 - **Low prefix hits + long prompts:** repeated prefill work; examine cache locality.
 - **Slow TPOT + modest compute use:** investigate memory traffic, batch size and context length.
 
-Cache block occupancy is different from total VRAM. GPU counters below require an exporter; cache bytes and memory bandwidth are not inferred from token counts.''')
-y += 8
+**Capacity grows with context and concurrency.** Approximate raw KV bytes per token = `2 × layers × KV heads × head dimension × bytes/value`. The article's Llama 3.1-70B example is `2 × 80 × 8 × 128 × 2 = 320 KiB/token`: 100,000 tokens require about 30.5 GiB before sharing, sharding, quantization and allocator overhead.
+
+**Active occupancy, retained prefixes and reserved VRAM differ.** An idle engine can report zero active occupancy while reusable, evictable prefix blocks remain. Its preallocated GPU pool can still occupy VRAM. The configuration table reports settings; it does not inspect tensor contents. Optional block residency charts need `--kv-cache-metrics` on a compatible vLLM version.''')
+y += 11
 row('06 / Hardware · optional NVIDIA DCGM exporter')
 add('GPU compute utilization', [('{{pod}} · GPU {{gpu}}', 'DCGM_FI_DEV_GPU_UTIL{job="inference"}')],
     'percent', 'Requires an annotated DCGM exporter in this namespace; not installed by setup. Covers all namespace GPUs, independent of Model / Pod filters.')
 add('GPU framebuffer memory used', [('{{pod}} · GPU {{gpu}}', 'DCGM_FI_DEV_FB_USED{job="inference"} * 1024 * 1024')],
     'bytes', 'DCGM reports MiB, converted to bytes. Includes weights, KV cache, activations and runtime allocations.', x=12)
+y += 8
+add('GPU memory bandwidth pressure · DRAM activity', [('{{pod}} · GPU {{gpu}}', '(DCGM_FI_PROF_DRAM_ACTIVE{job="inference"} or DCGM_FI_PROF_DRAM_UTIL_RATIO{job="inference"})')],
+    'percentunit', 'Optional DCGM profiling counter: fraction of cycles that the GPU memory interface is sending or receiving data. This is an activity ratio, not measured GB/s. Support depends on GPU and exporter configuration. Correlate high DRAM activity with TPOT, batch size and context length; activity alone cannot prove a bandwidth bottleneck.')
+add('GPU framebuffer memory free', [('{{pod}} · GPU {{gpu}}', 'DCGM_FI_DEV_FB_FREE{job="inference"} * 1024 * 1024')],
+    'bytes', 'Unallocated GPU framebuffer memory reported by DCGM, converted from MiB to bytes. A preallocated KV pool can retain VRAM even when active cache occupancy falls. This is distinct from the KV pool\'s free blocks.', x=12)
 y += 8
 row('07 / Client perspective · OpenLIT via OTLP')
 client = 'service_name=~"${service:regex}",gen_ai_response_model=~"${model:regex}"'
@@ -735,6 +897,13 @@ add('Client operation duration · p95', [('{{service_name}} · {{gen_ai_operatio
     's', 'OpenLIT client wall time includes network and provider overhead. Kept separate from engine metrics to avoid double counting. Model filters match gen_ai_response_model here.')
 add('Client input / output token usage', [('{{service_name}} · {{gen_ai_token_type}}', f'sum by (service_name,gen_ai_token_type) (rate(gen_ai_client_token_usage_sum{{{client}}}[$__rate_interval]))')],
     'tps', 'Sum of token usage histogram observations per second, not the observation count. Includes supported API embedding calls; these are distinct from internal token embedding lookup.', x=12)
+y += 8
+for x, title, suffix, explanation in [
+    (0, 'Client time to first streamed chunk · p95', 'time_to_first_chunk', 'Client wall time from sending the request until its first response chunk, including network, queueing and server work. It requires streaming client instrumentation; a chunk can carry multiple tokens.'),
+    (12, 'Client gap between streamed chunks · p95', 'time_per_output_chunk', 'Client-observed streaming cadence after the first chunk. Chunking, buffering and network delivery affect this independently of per-token server execution. This is not interchangeable with request-level TPOT.'),
+]:
+    add(title, [('{{service_name}}', f'histogram_quantile(0.95, sum by (le,service_name) (rate(gen_ai_client_operation_{suffix}_seconds_bucket{{{client}}}[$__rate_interval])))')],
+        's', explanation, x=x)
 y += 8
 add('Investigate a slow request', kind='text', w=24, h=4, content='''### Continue in Explore
 Open **Tempo** for request traces and **Loki** for workload logs using the links above. Filter by service and the dashboard time range. Structured logs containing `trace_id` link back to Tempo. Per-stage spans require runtime instrumentation; client traces alone cannot reveal internal GPU work.
@@ -746,6 +915,17 @@ def variable(name, label, query):
             'query': {'query': query, 'refId': name}, 'includeAll': True, 'allValue': '.*',
             'multi': True, 'sort': 1, 'current': {'text': 'All', 'value': '$__all'}}
 
+# Keep the explanations with the dashboard JSON, including exported copies.
+current_section = '00'
+for panel in panels:
+    if panel['type'] == 'row':
+        current_section = panel['title'][:2]
+    details = panel.get('description', '')
+    if panel.get('targets') and any('histogram_quantile' in target['expr'] for target in panel['targets']):
+        details += '\n\nPercentiles are estimated from histogram bucket rates across the selected engines. p95 means approximately 95% of observations fall below that value; it is not a latency guarantee for each request.'
+    panel['description'] = (details + '\n\n' + section_context[current_section] +
+        '\n\n[Inference overview · Part 1](' + article_url + '#' + section_guides[current_section][1] + ')').strip()
+
 # Include server and client-only models, retaining choices after pods stop.
 model_series = ('count by (model_name) (count_over_time({__name__=~"vllm:num_requests_running|'
                 'llm_inference_num_requests_running|llm_inference_stage_duration_seconds_count",'
@@ -755,7 +935,7 @@ client_models = ('label_replace(count by (gen_ai_response_model) '
                  'gen_ai_response_model!=""}[$__range])), "model_name", "$1", '
                  '"gen_ai_response_model", "(.+)")')
 model_query = f'query_result(count by (model_name) ({model_series} or {client_models}))'
-explore_links = []
+explore_links = [{'title': 'Learn · Inference overview', 'type': 'link', 'url': article_url, 'targetBlank': True}]
 for uid, label in [('tempo','Traces · Tempo'), ('loki','Logs · Loki')]:
     pane = json.dumps({'investigate': {'datasource': uid, 'queries': [], 'range': {'from':'${__from}','to':'${__to}'}}}, separators=(',', ':'))
     from urllib.parse import quote

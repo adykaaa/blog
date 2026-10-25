@@ -229,16 +229,24 @@ Open [LLM Inference](http://localhost:3000/d/llm-inference). It is provisioned f
 The dashboard provides:
 
 - TTFT, TPOT, end-to-end latency, and output throughput at a glance.
-- Scrape health, coverage of each stage, running requests, and queue depth.
-- Tokenization duration and throughput; prompt length percentiles.
+- Scrape health, coverage of each stage, latency tails, running requests, and per-replica queue depth.
+- Tokenization duration and throughput, live pod CPU usage, and prompt length percentiles.
 - Internal token embedding lookup duration and throughput.
-- Prefill duration, queue time, prompt throughput, and mean time by server phase.
-- Decode duration, TPOT versus inter-token latency, output length, and finish reasons.
-- Per-replica KV cache occupancy, token-weighted prefix hit rate, and preemptions.
-- Optional NVIDIA DCGM compute utilization and framebuffer memory usage.
-- A separate OpenLIT client view, with links to Tempo traces and Loki logs in Explore.
+- Prefill duration, queue time, prompt throughput, mean time by server phase, and scheduled tokens per engine iteration.
+- Decode duration, TPOT versus inter-token latency, output length/caps, and length-limited completion fractions.
+- KV occupancy/headroom, prefix hit/miss token rates, preemption rates/totals, newly computed KV tokens, optional block residency/reuse gaps, and reported cache configuration.
+- Optional NVIDIA DCGM compute utilization, used/free framebuffer memory, and DRAM activity.
+- A separate OpenLIT client view with operation duration, token usage, first streamed chunk and chunk cadence, plus links to Tempo traces and Loki logs.
 
-**Model** and **Engine pod** filter engine metrics. **Model** and **OTLP service** filter explicit stage timers; the client view uses `gen_ai.response.model` and the service filter. GPU and scrape-health panels cover the namespace independently of those filters. Variables use the selected time range so historical workloads remain selectable after removal. The default time range is one hour, refresh is 15 seconds, and Prometheus retains approximately one day of history, subject to its 512 MB storage cap.
+Each stage has a visible reading guide, and every panel has an expanded info tooltip linked to [Part 1: the inference overview](../../content/blog/llm-platform-engineering-1-inference-overview.md). The explanations connect token IDs and learned embeddings to Q/K/V, parallel prefill, autoregressive decode, context growth, and the GPU's compute/capacity/bandwidth constraints. They also explain measurement boundaries, percentile estimates and common causes of misleading comparisons.
+
+**Model** and **Engine pod** filter engine metrics. **Model** and **OTLP service** filter explicit stage timers; the client view uses `gen_ai.response.model` and the service filter. CPU panels follow **Engine pod** independently of Model/Service; All includes every pod in the sandbox namespace. GPU and scrape-health panels cover the namespace independently of those filters. Variables use the selected time range so historical workloads remain selectable after removal. The default time range is one hour, refresh is 15 seconds, and Prometheus retains approximately one day of history, subject to its 512 MB storage cap.
+
+The Collector's kubelet metrics preset reads pod CPU usage from the single minikube node every 15 seconds, using service-account authentication and read access to `nodes/stats`. No additional exporter image is installed. One reported core means one fully busy logical CPU. Whole-pod CPU includes HTTP handling, scheduling, model execution and other processes; it does not isolate the tokenizer or express usage relative to a CPU limit. CPU history starts when this receiver is enabled and is not backfilled for previously removed workloads. The local kubelet uses a self-signed certificate, so this receiver skips certificate verification.
+
+KV headroom is the remaining fraction of the runtime's active cache-block capacity, rather than free GPU bytes. Cache configuration comes from reported labels and is joined to the model's engine inventory, including when viewing historical deployments. Settings such as `kv_cache_memory_bytes` are budgets, not current tensor usage. An idle engine can retain reusable prefixes in an allocated pool while active occupancy falls to zero. Preemption totals use `increase()` over the selected interval and are estimates, including counter-reset handling.
+
+Block lifetime, idle-before-eviction and reuse-gap histograms require a compatible vLLM version with `--kv-cache-metrics` enabled. The optional `--kv-cache-metrics-sample` setting controls sampling; these panels describe sampled blocks and can stay empty until reuse or eviction produces observations. `request_prefill_kv_computed_tokens` and requested output-cap histograms also depend on runtime version. Unsupported or unobserved metrics remain unmeasured. Setup does not change a model server's arguments.
 
 ### Connect server metrics
 
@@ -264,7 +272,7 @@ The engine queries use native [`vllm:*` metrics](https://docs.vllm.ai/en/latest/
 
 Other runtimes can expose the same suffixes under `llm_inference_` with the same units/types and `model_name` label. For example, `llm_inference_request_prefill_time_seconds` must be a histogram of actual prefill duration and `llm_inference_kv_cache_usage_perc` a gauge of used cache capacity as a fraction from 0 to 1. Native vLLM series take precedence when both names represent the same series. Histogram queries aggregate bucket rates before computing percentiles; prefix hit rate divides token counter rates. Idle or missing measurements are not filled with zeros.
 
-A DCGM exporter can opt in through the same pod annotation and named port. It must expose `DCGM_FI_DEV_GPU_UTIL` (percent) and `DCGM_FI_DEV_FB_USED` (MiB). Setup does not install a GPU exporter; those panels remain unavailable on macOS or until one is connected.
+A DCGM exporter can opt in through the same pod annotation and named port. GPU utilization uses `DCGM_FI_DEV_GPU_UTIL` (percent); framebuffer panels use `DCGM_FI_DEV_FB_USED` / `DCGM_FI_DEV_FB_FREE` (MiB). The optional DRAM panel uses `DCGM_FI_PROF_DRAM_ACTIVE` (or its newer `DRAM_UTIL_RATIO` name), an activity ratio rather than measured GB/s. Profiling support depends on hardware and exporter configuration. Setup does not install a GPU exporter; those panels remain unavailable on macOS or until one is connected.
 
 ### Measure tokenization and internal embeddings
 
