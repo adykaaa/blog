@@ -963,6 +963,6 @@ This was quite a long one, and we haven't done anything fun or practical. Howeve
 
 If you're like me, reading just the theory doesn't really solidify concepts -- so in the **next part** we will deploy our complete observability stack into `minikube` and not only will we deploy our **first local LLM**, but we will also see some **phases** we've learnt about in this article **in action**. Let's go!
 
-## Test your understanding
+## A quick (LLM generated, ha!) test
 
 {{< quiz id="inference-overview" >}}
