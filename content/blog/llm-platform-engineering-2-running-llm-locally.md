@@ -30,5 +30,35 @@ The setup script I'm about to reference assumes that you are:
 - running this from a **Linux** distro (WSL2 also works)
 - have **Docker** installed AND running on your machine
 - have an **NVIDIA** GPU in your machine with drivers and the container toolkit installed
-- have 4 CPU cores and 8`GiB` of RAM available
+- have 4 `CPU` cores and 8`GiB` of RAM available
 - have sudo access
+
+The `01-llm-obs-setup.sh` script installs some CLI tools we'll need (`kubectl`, `helm`, `minikube`) and then it sets up a `minikube` environment that has `Grafana`, `OpenLIT`, `Prometheus`, `OpenTelemetry`, `Tempo` and `Loki` installed (_as minimally as possible_) and connected. These tools are going to be needed to **provide an observable Kubernetes environment**, as everything we'll be doing in future articles will happen inside K8s.
+
+If your machine meets the requirements from above (_if it doesn't don't worry, just reading the article carefully will also do the job_), all you have to do is:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/adykaaa/blog/main/code/llm-platform-eng-1/01-llm-obs-setup.sh -o 01-llm-obs-setup.sh
+bash 01-llm-obs-setup.sh
+```
+
+to get things going. It will take a few minutes but hopefully you'll see a message like so when the script has run:
+
+```text
+Grafana: http://localhost:3000
+Username: admin
+Password: <YOUR_GRAFANA_ADMIN_PASSWORD>
+OpenLIT: http://localhost:3001 (create your local account)
+OTLP HTTP: http://127.0.0.1:4318
+OTLP gRPC: 127.0.0.1:4317
+In-cluster OTLP HTTP: http://otel.llm-obs.svc.cluster.local:4318
+
+Forwarding runs in the background and reconnects after pod/cluster restarts.
+To stop a forward, send TERM to the PID in its .pid file.
+Forward PIDs/logs, values and exact versions: /home/adykaaa/.local/state/llm-obs/llm-obs
+Stop the sandbox: minikube stop --profile llm-obs
+Delete the sandbox AND its stored data: minikube delete --profile llm-obs
+```
+
+To double check whether everything is setup as it should be, we can head over to localhost:3000 and log into `Grafana` using the username `admin` and the printed admin password. Then go into `Connections -> View Configured Data Sources` and all 3 of these should be set up:
+![Grafana](../../static/images/llm-platform-2-running-llm-locally/grafana-data-sources.png)
