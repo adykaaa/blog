@@ -36,7 +36,9 @@ The setup script I'm about to reference assumes that you are:
 
 (the screenshots I'm going to be posting here are going to be from a machine using WSL2, 32 `GB` RAM, and an old `RTX 2070 8GB`)
 
-The `01-llm-obs-setup.sh` script installs some CLI tools we'll need (`kubectl`, `helm`, `minikube`) and then it sets up a `minikube` environment that has `Grafana`, `OpenLIT`, `Prometheus`, `OpenTelemetry`, `Tempo` and `Loki` installed (_as minimally as possible_) and connected (alongside a cool dashboard). These tools are going to be needed to **provide an observable Kubernetes environment**, as everything we'll be doing in future articles will happen inside K8s.
+The `01-llm-obs-setup.sh` script installs some CLI tools we'll need (`kubectl`, `helm`, `minikube`) and then it sets up a `minikube` environment that has `Grafana`, `Prometheus`, `OpenTelemetry Collector`, `Tempo` and `Loki` installed (_as minimally as possible_) and connected (alongside a cool dashboard). These tools are going to be needed to **provide an observable Kubernetes environment**, as everything we'll be doing in future articles will happen inside K8s.
+
+The script also installs the `OpenLIT` Python SDK in a local virtual environment. We'll use it to instrument the client calling our LLM and send metrics and traces to the `OpenTelemetry Collector`. In `Grafana`, we'll view those metrics through `Prometheus` and traces through `Tempo`. We don't deploy the OpenLIT UI/backend or ClickHouse.
 
 If your machine meets the requirements from above (_if it doesn't don't worry, just reading the article carefully will also do the job_), all you have to do is:
 
@@ -51,7 +53,6 @@ to get things going. It will take a few minutes but hopefully you'll see a messa
 Grafana: http://localhost:3000
 Username: admin
 Password: <YOUR_GRAFANA_ADMIN_PASSWORD>
-OpenLIT: http://localhost:3001 (create your local account)
 OTLP HTTP: http://127.0.0.1:4318
 OTLP gRPC: 127.0.0.1:4317
 In-cluster OTLP HTTP: http://otel.llm-obs.svc.cluster.local:4318
@@ -77,4 +78,18 @@ For stopping the cluster you can do `minikube stop --profile llm-obs` and to sta
 
 To **nuke** it out of existence use `minikube delete --profile llm-obs`.
 
-# Model server
+# Model engine and server
+
+## Engine
+
+In [part 1](https://adykaaa.github.io/blog/llm-platform-engineering-1-inference-overview/) of this series we have learnt about **inference**. If we take a step back though, when we look at a model on HuggingFace, all we see is a bunch of files -- one of which is the `model.safetensors` one that we touched on in the article. If we just download all those files, how do we run the LLM?
+
+This is where a model engine comes in. A model engine basically knows how to take all of those files, **allocate** GPU space for them, **load** them onto the GPU(s), and them **execute** the model. This is all we need to know for now. We'll be using [vLLM](https://vllm.ai/).
+
+We'll have a completely separate article dedicated just to `vLLM`, so this is why I'm not diving deeper into it here. It does a LOT more than just running our model, but more on that later.
+
+## Model server
+
+It's great to have a model engine that knows how to run a model, but we need a **server** that wraps that engine so that it can accept requests and provide responses (_after all if there is no server, where will our users send the prompts to the LLM?_). `vLLM` also acts as a model server, so we can kill 2 birds with 1 stone by using it :)
+
+#

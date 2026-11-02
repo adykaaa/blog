@@ -31,7 +31,6 @@ NAMESPACE=${NAMESPACE:-llm-obs}
 CPUS=${CPUS:-4}
 MEMORY=${MEMORY:-8192}
 GRAFANA_PORT=${GRAFANA_PORT:-3000}
-OPENLIT_PORT=${OPENLIT_PORT:-3001}
 OTLP_GRPC_PORT=${OTLP_GRPC_PORT:-4317}
 OTLP_HTTP_PORT=${OTLP_HTTP_PORT:-4318}
 STATE_DIR=${STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/llm-obs/$PROFILE}
@@ -179,7 +178,7 @@ if [[ $RENDER_ONLY != 1 ]]; then
   helm version --short | python3 -c 'import re,sys; m=re.search(r"v?(\d+)\.",sys.stdin.read()); sys.exit(0 if m and int(m[1]) >= 3 else "Helm 3+ required; update your installed Helm")'
 fi
 [[ $PROFILE =~ ^[a-z][a-z0-9-]*$ && $NAMESPACE =~ ^[a-z][a-z0-9-]*$ ]] || fail 'Use DNS labels for PROFILE and NAMESPACE.'
-python3 - "$GRAFANA_PORT" "$OPENLIT_PORT" "$OTLP_GRPC_PORT" "$OTLP_HTTP_PORT" <<'PY'
+python3 - "$GRAFANA_PORT" "$OTLP_GRPC_PORT" "$OTLP_HTTP_PORT" <<'PY'
 import sys
 ports = [int(p) for p in sys.argv[1:]]
 assert len(set(ports)) == len(ports) and all(1024 <= p <= 65535 for p in ports), 'Ports must be distinct and in 1024..65535'
@@ -194,15 +193,12 @@ LOKI_VERSION=${LOKI_VERSION:-$(latest grafana/loki)}
 TEMPO_VERSION=${TEMPO_VERSION:-$(latest grafana/tempo)}
 GRAFANA_VERSION=${GRAFANA_VERSION:-$(latest grafana/grafana)}
 OTEL_VERSION=${OTEL_VERSION:-$(latest open-telemetry/opentelemetry-collector-releases)}
-OPENLIT_VERSION=${OPENLIT_VERSION:-$(curl --fail --silent --show-error --retry 3 'https://api.github.com/repos/openlit/openlit/releases?per_page=100' |
-  python3 -c 'import json,re,sys; print(next(r["tag_name"].removeprefix("openlit-") for r in json.load(sys.stdin) if not r["prerelease"] and not r["draft"] and re.fullmatch(r"openlit-[0-9]+\.[0-9]+\.[0-9]+",r["tag_name"])))')}
 PROMETHEUS_VERSION=${PROMETHEUS_VERSION:-$(latest prometheus/prometheus)}
-for version in "$LOKI_VERSION" "$TEMPO_VERSION" "$GRAFANA_VERSION" "$OTEL_VERSION" "$OPENLIT_VERSION" "$PROMETHEUS_VERSION"; do
+for version in "$LOKI_VERSION" "$TEMPO_VERSION" "$GRAFANA_VERSION" "$OTEL_VERSION" "$PROMETHEUS_VERSION"; do
   [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "Expected stable semver, got: $version"
 done
 helm repo add llm-grafana https://grafana-community.github.io/helm-charts --force-update
 helm repo add llm-otel https://open-telemetry.github.io/opentelemetry-helm-charts --force-update
-helm repo add llm-openlit https://openlit.github.io/helm/ --force-update
 helm repo update
 chart_version() {
   helm search repo "$1" --versions -o json | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["version"])'
@@ -211,8 +207,7 @@ LOKI_CHART_VERSION=${LOKI_CHART_VERSION:-$(chart_version llm-grafana/loki)}
 TEMPO_CHART_VERSION=${TEMPO_CHART_VERSION:-$(chart_version llm-grafana/tempo)}
 GRAFANA_CHART_VERSION=${GRAFANA_CHART_VERSION:-$(chart_version llm-grafana/grafana)}
 OTEL_CHART_VERSION=${OTEL_CHART_VERSION:-$(chart_version llm-otel/opentelemetry-collector)}
-OPENLIT_CHART_VERSION=${OPENLIT_CHART_VERSION:-$(chart_version llm-openlit/openlit)}
-for name in LOKI TEMPO GRAFANA OTEL OPENLIT PROMETHEUS; do
+for name in LOKI TEMPO GRAFANA OTEL PROMETHEUS; do
   var=${name}_VERSION; printf '%s=%s\n' "$var" "${!var}"
   if [[ $name != PROMETHEUS ]]; then
     var=${name}_CHART_VERSION; printf '%s=%s\n' "$var" "${!var}"
@@ -290,33 +285,8 @@ persistence:
   enabled: true
   size: 2Gi
 EOF
-cat > "$STATE_DIR/openlit.yaml" <<EOF
-fullnameOverride: openlit
-replicaCount: 1
-image:
-  tag: "$OPENLIT_VERSION"
-service: {type: ClusterIP}
-extraEnv:
-  - {name: OPENLIT_EDITION, value: ce}
-resources:
-  requests: {cpu: 100m, memory: 256Mi}
-  limits: {cpu: "1", memory: 1Gi}
-persistence:
-  enabled: true
-  size: 1Gi
-config:
-  usageMetrics: false
-  database:
-    host: "openlit-db.$NAMESPACE.svc.cluster.local"
-clickhouse:
-  persistence: {size: 3Gi}
-  resources:
-    requests: {cpu: 100m, memory: 512Mi}
-    limits: {cpu: "1", memory: 1536Mi}
-openlit-controller: {enabled: false}
-EOF
-# One standalone contrib Collector handles all three signals. OpenLIT's platform
-# chart also runs its own embedded ingestion process; it is not another pod.
+# One standalone contrib Collector routes metrics to Prometheus, traces to Tempo,
+# and logs to Loki. The OpenLIT SDK exports to this Collector without a separate backend.
 cat > "$STATE_DIR/otel.yaml" <<'EOF'
 fullnameOverride: otel
 mode: deployment
@@ -382,8 +352,6 @@ alternateConfig:
       tls: {insecure: true}
     otlphttp/loki:
       endpoint: http://loki:3100/otlp
-    otlphttp/openlit:
-      endpoint: http://openlit:4318
     prometheus:
       endpoint: "0.0.0.0:8889"
       resource_to_telemetry_conversion: {enabled: true}
@@ -394,15 +362,15 @@ alternateConfig:
       traces:
         receivers: [otlp]
         processors: [memory_limiter, batch]
-        exporters: [otlp/tempo, otlphttp/openlit]
+        exporters: [otlp/tempo]
       logs:
         receivers: [otlp]
         processors: [memory_limiter, batch]
-        exporters: [otlphttp/loki, otlphttp/openlit]
+        exporters: [otlphttp/loki]
       metrics:
         receivers: [otlp]
         processors: [memory_limiter, batch]
-        exporters: [prometheus, otlphttp/openlit]
+        exporters: [prometheus]
 EOF
 cat > "$STATE_DIR/prometheus.yaml" <<EOF
 apiVersion: v1
@@ -1017,7 +985,6 @@ render_or_install() {
 install_stack() {
   render_or_install loki llm-grafana/loki "$LOKI_CHART_VERSION" "$STATE_DIR/loki.yaml"
   render_or_install tempo llm-grafana/tempo "$TEMPO_CHART_VERSION" "$STATE_DIR/tempo.yaml"
-  render_or_install openlit llm-openlit/openlit "$OPENLIT_CHART_VERSION" "$STATE_DIR/openlit.yaml"
   render_or_install otel llm-otel/opentelemetry-collector "$OTEL_CHART_VERSION" "$STATE_DIR/otel.yaml" --set-string image.tag="$OTEL_VERSION"
   render_or_install grafana llm-grafana/grafana "$GRAFANA_CHART_VERSION" "$STATE_DIR/grafana.yaml" --set-string image.tag="$GRAFANA_VERSION"
 }
@@ -1144,7 +1111,6 @@ PY
   fail "Forward $name did not start; see $logfile"
 }
 start_forward grafana grafana "$GRAFANA_PORT:80"
-start_forward openlit openlit "$OPENLIT_PORT:3000"
 start_forward otlp otel "$OTLP_GRPC_PORT:4317" "$OTLP_HTTP_PORT:4318"
 curl --fail --silent --show-error --retry 10 --retry-connrefused --retry-delay 1 "http://127.0.0.1:$GRAFANA_PORT/api/health" >/dev/null
 printf '\nGrafana: http://localhost:%s\nUsername: admin\nPassword: ' "$GRAFANA_PORT"
@@ -1152,7 +1118,6 @@ k get secret grafana-admin -o jsonpath='{.data.admin-password}' | python3 -c 'im
 cat <<EOF
 Inference dashboard: http://localhost:$GRAFANA_PORT/d/llm-inference
 Internal-stage instrumentation helper: $STATE_DIR/inference_metrics.py
-OpenLIT: http://localhost:$OPENLIT_PORT (create your local account)
 OTLP HTTP: http://127.0.0.1:$OTLP_HTTP_PORT
 OTLP gRPC: 127.0.0.1:$OTLP_GRPC_PORT
 In-cluster OTLP HTTP: http://otel.$NAMESPACE.svc.cluster.local:4318

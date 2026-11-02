@@ -1,10 +1,10 @@
 # Local LLM observability sandbox
 
-[01-llm-obs-setup.sh](./01-llm-obs-setup.sh) detects Linux or macOS, creates a minikube cluster, and installs OpenTelemetry Collector, OpenLIT Community Edition with ClickHouse, Loki, Tempo, Grafana, and a small Prometheus instance for metrics.
+[01-llm-obs-setup.sh](./01-llm-obs-setup.sh) detects Linux or macOS, creates a minikube cluster, and installs OpenTelemetry Collector, Loki, Tempo, Grafana, and a small Prometheus instance for metrics.
 
 Grafana comes with Loki, Tempo, and Prometheus data sources and a provisioned **LLM Inference · From prompt to token** dashboard, also used as the home dashboard. It covers tokenization, internal embeddings, prefill, decode, KV cache, request pressure, and optional GPU metrics. No model or sample telemetry is installed by setup; measurements appear when you connect workloads.
 
-The script resolves the latest stable application releases and Helm charts and records the selected versions. It installs the OpenLIT Python SDK in an isolated virtual environment. It automatically installs missing CLI prerequisites and reuses installed tools. Docker and Linux NVIDIA drivers/toolkit must be prepared separately. It does not instrument already-running agents.
+The script resolves the latest stable application releases and Helm charts and records the selected versions. It installs the OpenLIT Python SDK in an isolated virtual environment for client metrics and traces. The SDK sends telemetry to the Collector; no OpenLIT platform or ClickHouse deployment is needed. Grafana reads metrics from Prometheus, traces from Tempo, and logs from Loki. It automatically installs missing CLI prerequisites and reuses installed tools. Docker and Linux NVIDIA drivers/toolkit must be prepared separately. It does not instrument already-running agents.
 
 ## Supported hosts
 
@@ -103,11 +103,11 @@ The script checks this setting but does not change it. Follow the linked NVIDIA/
 ### Resources, network, and permissions
 
 - The default cluster requests **4 CPUs and 8 GiB RAM**. Leave additional memory for the host and Docker Desktop VM where applicable. Agent/model workloads need additional resources and, on Linux, GPU VRAM.
-- Persistent volumes request **10 GiB total**. Leave additional disk space for Kubernetes, container images, the Python environment, and growing telemetry. The script uses minikube's default disk configuration.
+- Persistent volumes request **6 GiB total**. Leave additional disk space for Kubernetes, container images, the Python environment, and growing telemetry. The script uses minikube's default disk configuration.
 - Allow outbound HTTPS from the host and cluster to GitHub's API/raw content, Helm repositories, container registries (including Docker Hub, GHCR, and minikube/Kubernetes image registries), and PyPI/package download hosts. Cluster DNS must work.
 - A GitHub account/token is not required. Unauthenticated GitHub release discovery is rate limited.
 - The user needs a writable state directory and permission to manage a minikube Docker container.
-- Local TCP ports **3000, 3001, 4317, and 4318** must be available or overridden. Overrides must be distinct and between 1024 and 65535.
+- Local TCP ports **3000, 4317, and 4318** must be available or overridden. Overrides must be distinct and between 1024 and 65535.
 - No LLM provider credentials are required to install the stack. Your agents need their own dependencies and provider credentials.
 
 ### Automatic installation behavior
@@ -163,7 +163,6 @@ The script enables storage add-ons, waits for the services, checks Grafana HTTP 
 | -------------------- | ------------------------------------------------- |
 | Grafana              | http://localhost:3000                             |
 | Inference dashboard  | http://localhost:3000/d/llm-inference              |
-| OpenLIT              | http://localhost:3001 — create your local account |
 | OTLP HTTP            | http://127.0.0.1:4318                             |
 | OTLP gRPC            | 127.0.0.1:4317                                    |
 | In-cluster OTLP HTTP | http://otel.llm-obs.svc.cluster.local:4318        |
@@ -187,7 +186,6 @@ CPUS=6 MEMORY=12288 GRAFANA_PORT=3002 bash ./01-llm-obs-setup.sh
 | `CPUS`           | `4`                                                      | minikube CPU allocation                                                      |
 | `MEMORY`         | `8192`                                                   | minikube memory allocation in MiB                                            |
 | `GRAFANA_PORT`   | `3000`                                                   | Local Grafana port                                                           |
-| `OPENLIT_PORT`   | `3001`                                                   | Local OpenLIT port                                                           |
 | `OTLP_GRPC_PORT` | `4317`                                                   | Local Collector OTLP gRPC port                                               |
 | `OTLP_HTTP_PORT` | `4318`                                                   | Local Collector OTLP HTTP port                                               |
 | `STATE_DIR`      | `${XDG_STATE_HOME:-$HOME/.local/state}/llm-obs/$PROFILE` | Generated values, versions, virtual environment, forwarding logs/PIDs        |
@@ -200,9 +198,9 @@ Preview mode needs Bash, standard utilities, Helm, curl, Python 3.10+, and netwo
 RENDER_ONLY=1 bash ./01-llm-obs-setup.sh
 ```
 
-To pin versions, override `LOKI_VERSION`, `TEMPO_VERSION`, `GRAFANA_VERSION`, `OTEL_VERSION`, `OPENLIT_VERSION`, and `PROMETHEUS_VERSION`. All except Prometheus also support `*_CHART_VERSION`. Use application versions without a leading `v` or `openlit-` prefix. Selections are saved in `versions.env`; Python packages are recorded in `python-requirements.lock`. These are records, not automatically loaded on subsequent runs.
+To pin versions, override `LOKI_VERSION`, `TEMPO_VERSION`, `GRAFANA_VERSION`, `OTEL_VERSION`, and `PROMETHEUS_VERSION`. All except Prometheus also support `*_CHART_VERSION`. Use application versions without a leading `v` prefix. Selections are saved in `versions.env`; Python packages are recorded in `python-requirements.lock`. These are records, not automatically loaded on subsequent runs.
 
-The SDK is installed from PyPI. ClickHouse retains the version provided by the OpenLIT chart. Future upstream changes may require configuration updates; successful chart rendering alone does not establish runtime compatibility.
+The SDK is installed from PyPI. Future upstream changes may require configuration updates; successful chart rendering alone does not establish runtime compatibility.
 
 ## Connect an agent
 
@@ -218,7 +216,7 @@ Set `OTEL_SERVICE_NAME` to distinguish agents. Adjust the environment file path 
 
 Alternatively, install your agent's dependencies into the script-created virtual environment and use the command printed by the script. For containerized Python agents, install `openlit` in the image, use the in-cluster Collector endpoint, and launch with `openlit-instrument python your_agent.py`.
 
-OpenLIT instruments supported frameworks when launched this way; installation alone does not instrument existing processes. The enterprise eBPF controller is disabled. The dashboard's client section queries current OpenLIT `gen_ai.client.operation.duration` and `gen_ai.client.token.usage` histograms exported through the Collector. Engine internals need server metrics or explicit instrumentation as described below.
+The OpenLIT SDK instruments supported frameworks when launched this way; installation alone does not instrument existing processes. The dashboard's client section queries current OpenLIT `gen_ai.client.operation.duration` and `gen_ai.client.token.usage` histograms exported through the Collector. Engine internals need server metrics or explicit instrumentation as described below.
 
 The Collector reads Kubernetes stdout/stderr from the single minikube node, including on macOS where the node runs inside Docker Desktop. Host processes must explicitly export OTLP logs, for example with an OpenTelemetry logging handler. SDK traces do not automatically capture stdout. Include `trace_id` in structured logs for log-to-trace links.
 
@@ -333,7 +331,7 @@ ps -p "$(cat "$HOME/.local/state/llm-obs/llm-obs/grafana.pid")" -o pid,args
 kill "$(cat "$HOME/.local/state/llm-obs/llm-obs/grafana.pid")"
 ```
 
-Repeat for `openlit.pid` and `otlp.pid`. Stop the cluster while retaining data:
+Repeat for `otlp.pid`. Stop the cluster while retaining data:
 
 ```bash
 minikube stop --profile llm-obs
